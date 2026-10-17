@@ -75,14 +75,22 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
 >   python3 ~/.colab-dfs-ext/colab_dfs_ext/dfs_creds.py consent --flavor dfs --scopes "https://www.googleapis.com/auth/drive" --user-id <GaiaId> --email <Email>
 >   ```
 
-## 4. Agent 标准作业程序 (SOP)
+## 4. Agent 标准作业程序 (SOP) 与全生命周期托管
 
-1. **双通道连接与硬件探测**：
-   - **通道 A（网页桥接 `colab-mcp`）**：若用户已打开 Colab 网页，调用 `colab-mcp` 的 `get_cells` 并运行 `Cell 1` 的 `inspect_hardware(task_type)`。
-   - **通道 B（无头终端 `colab` CLI）**：若处于无浏览器环境或需后台静默运行，直接通过 `~/.local/bin/colab connect -s <session>` 连接并执行硬件探测（若未安装则先按第 3 节自动安装）。
+1. **双通道按需连接与指定显卡开机**：
+   - **通道 A（无头终端 `colab` CLI — 100% 全自动选卡开机/关机）**：
+     - **启动免费 CPU (0 CCU/h)**：`~/.local/bin/colab new -s <session>`（默认不传 `--gpu` 即为 CPU，专用于下载模型、解压数据集与整理 20TB/30TB 云盘）
+     - **按选卡矩阵精准启动 GPU**：`~/.local/bin/colab new -s <session> --gpu <T4|L4|G4|A100|H100>`（例如主力王炸卡：`colab new -s work --gpu G4`；轻量任务：`colab new -s work --gpu L4`）
+     - **跑完即焚单次任务**：`~/.local/bin/colab run <script.py> --gpu <G4|L4|T4>`（自动创建指定显卡实例、运行脚本并在结束瞬间自动销毁释放 VM，绝不多扣一秒 CCU）
+     - **查看账户 CCU 余额与实时消耗速率**：`~/.local/bin/colab usage`
+     - **查看活跃会话与随时转网页查看**：`~/.local/bin/colab sessions` / `~/.local/bin/colab url -s <session>`
+   - **通道 B（网页桥接 `colab-mcp`）**：
+     - 当用户希望在浏览器中实时查看 Notebook 时，调用 `colab-mcp` 的 `open_colab_browser_connection` 连接，并运行 `inspect_hardware(task_type)`。
+
 2. **防浪费与防 OOM 双重把关**：
    - 若用户用 G4/A100 跑 7B/8B 小模型，触发「大炮打蚊子预警」，建议降级到 **L4 (1.71 CCU/h)**；
    - 若用户用 40G A100 或 L4 跑 32B BF16 或 70B 模型，触发「OOM 显存不足预警」，建议切换到 **G4 (96GB Blackwell)**。
+
 3. **20TB/30TB 云盘零浏览器静默挂载与持久化（`colab-dfs-ext`）**：
    - **优先零弹窗挂载（支持 CLI 与 `colab-mcp` 双模式一键脚本）**：
      - **CLI 模式**：调用 `~/.local/bin/colab dfs mount -s <session>`（或设置 `COLAB_DFS_DEFAULT=1` 后执行 `colab drivemount`）。
@@ -91,7 +99,7 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
      - 云盘挂载后，直接从 `/content/drive/MyDrive/AI_Workstation/workstation_init.py` 导入标准函数（若不存在则从仓库自动同步至云盘），无需每次在记事本中重复粘贴百行初始化代码：
        ```python
        import sys; sys.path.insert(0, "/content/drive/MyDrive/AI_Workstation")
-       from workstation_init import inspect_hardware, ensure_drive_mounted, smart_download_model
+       from workstation_init import inspect_hardware, ensure_drive_mounted, smart_download_model, release_runtime
        HW_CONFIG = inspect_hardware("general")
        DIRS = ensure_drive_mounted("/content/drive")
        ```
@@ -100,6 +108,16 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
      - 通过容器内 `http://127.0.0.1:8012/computeMetadata/v1/instance/service-accounts/default/token` 获取 Token 调用 `https://www.googleapis.com/drive/v3/about?fields=storageQuota,user`，精准校验并展示 **20.00 TB (5x) / 30.00 TB (20x)** 真实云端容量。
    - **只读防误删模式**：当任务仅为读取 20TB/30TB 云盘中的模型权重进行推理、无需写入云盘时，可使用 `colab dfs mount -s <session> --readonly` 防止脚本误删模型库。
    - **FUSE 假死原地自愈**：若云盘出现 I/O 挂起或 `Transport endpoint is not connected` 报错，严禁直接重启 Runtime 导致环境丢失，应优先执行 `colab dfs mount -s <session> --force --purge-state` 原地清理 DriveFS 状态并重挂。
-   - **目录规范与用完释放**：模型权重统一存放在 `/content/drive/MyDrive/AI_Workstation/models`；任务完成后务必提醒用户「断开连接并删除运行时」以停止 CCU 计费。
 
+4. **任务完成自动断连与销毁释放（Stop CCU Billing）**：
+   - **CLI 通道主动释放**：任务结束且产物已写入 `/content/drive/MyDrive/AI_Workstation/outputs` 后，Agent 必须执行 `~/.local/bin/colab stop -s <session>` 销毁实例停止计费，并可调用 `~/.local/bin/colab usage` 汇报剩余 CCU。
+   - **`colab-mcp` 网页通道主动释放**：无需用户手动点击网页菜单，Agent 可直接在单元格中执行以下代码立即销毁并释放云端运行时（立停计费）：
+     ```python
+     from google.colab import runtime
+     runtime.unassign()  # 或调用 workstation_init.release_runtime()
+     ```
 
+5. **全自动跨档位「零浪费」流水线闭环（Zero-Burn Pipeline）**：
+   - 当用户要求运行尚未缓存至云盘的大模型（如 Wan2.1-14B / 32B / 70B）时，Agent 可全自动串联：
+     1. `colab new -s dl`（0 CCU/h 免费 CPU 开机）$\rightarrow$ `colab dfs mount -s dl` $\rightarrow$ 高速下载模型至 20TB/30TB 云盘 $\rightarrow$ `colab stop -s dl`（销毁 CPU 实例）；
+     2. `colab new -s gpu --gpu G4`（启动 96GB Blackwell G4）$\rightarrow$ `colab dfs mount -s gpu` $\rightarrow$ 零网络流量从云盘加载权重完成推理/微调，结果写回云盘 $\rightarrow$ `colab stop -s gpu`（跑完立即销毁 G4 实例停止扣费）$\rightarrow$ `colab usage` 汇报 CCU 余额。

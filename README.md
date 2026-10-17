@@ -65,13 +65,28 @@ echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
 
 > ⚠️ **首次授权必看（Google OAuth 复选框陷阱）**：在浏览器弹出的 Google 授权确认页中，**「查看、编辑、创建和删除您的所有 Google 云端硬盘文件 (Google Drive)」** 旁边的复选框默认是**未勾选**状态，请务必手动勾选后再点击「继续」，否则签发的 Token 缺少 `drive` 权限会导致挂载报 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`。
 
-常用零浏览器云盘运维命令：
+常用零浏览器算力调度与云盘运维命令：
 ```bash
-colab dfs mount -s <session>                       # 秒级静默挂载 /content/drive（含后台 Token 自动续期）
-colab dfs mount -s <session> --readonly            # 只读挂载（保护 20TB/30TB 模型库防脚本误删）
-colab dfs mount -s <session> --force --purge-state # DriveFS/FUSE 假死原地抢救重挂（无需重启 Runtime）
-colab dfs status -s <session>                      # 查看云盘挂载与 Token 守护进程状态
+# 1. 按档位创建并连接实例（全自动选卡）
+colab new -s work                                  # 启动免费 CPU (0 CCU/h) 下载模型/整理云盘
+colab new -s work --gpu L4                         # 启动 L4 GPU (22.5GB, 1.71 CCU/h)
+colab new -s work --gpu G4                         # 启动 G4 GPU (96GB Blackwell, 8.71 CCU/h)
+colab new -s work --gpu T4|A100|H100               # 启动 T4 / A100 / H100
+colab run train.py --gpu G4                        # “跑完即焚”：开一台 G4 跑完脚本立即自动销毁释放 VM
+
+# 2. 零浏览器云盘挂载与自愈
+colab dfs mount -s work                            # 秒级静默挂载 /content/drive（含后台 Token 自动续期）
+colab dfs mount -s work --readonly                 # 只读挂载（保护 20TB/30TB 模型库防脚本误删）
+colab dfs mount -s work --force --purge-state      # DriveFS/FUSE 假死原地抢救重挂（无需重启 Runtime）
+colab dfs status -s work                           # 查看云盘挂载与 Token 守护进程状态
+
+# 3. 断连销毁实例（立停 CCU 计费）与查账
+colab stop -s work                                 # CLI 模式：立即销毁释放指定实例，停止扣除 CCU
+colab usage                                        # 实时查询账户剩余 CCU 余额与当前消耗速率
+colab url -s work                                  # 生成浏览器链接，随时点开查看当前 CLI 会话
 ```
+
+> 💡 **网页模式 (`colab-mcp`) 自动断连释放**：在 Notebook 单元格中由 Agent 执行 `from google.colab import runtime; runtime.unassign()`（或调用 `workstation_init.release_runtime()`），无需人工点网页菜单即可立即销毁 VM 停止计费。
 
 ### 3. 安装 `colab-ultra-workstation` 技能
 

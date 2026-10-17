@@ -163,3 +163,13 @@ def smart_download_model(repo_id: str, hw_config: dict, dirs: dict, force_on_gpu
     print(f"✅ 下载完成并已持久化至云盘: {target_dir}")
     return target_dir
 
+
+# --- [Cell 4] 任务完成主动断连并销毁运行时 (立停 CCU 计费) ---
+def release_runtime():
+    """
+    在 Colab 单元格中直接调用官方 runtime.unassign() 销毁并释放当前云端虚拟机，立即停止 CCU 计费。
+    """
+    print("🛑 正在主动断开并销毁当前 Colab 运行时，立即停止 CCU 计费...")
+    from google.colab import runtime
+    runtime.unassign()
+
