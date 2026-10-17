@@ -56,12 +56,24 @@ curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-dfs-ext/main/insta
 # 3) 环境与注入状态自检
 colab dfs doctor
 
-# 4) 首次一次性 OAuth 授权（仅首次需浏览器确认，生成 ~/.config/colab-cli/dfs_credentials.json）
-colab dfs consent
+# 4) 首次一次性 OAuth 授权（生成 ~/.config/colab-cli/dfs_credentials.json）
+# ⚠️ 注意：若本地需走代理访问 Google，请加上 https_proxy/http_proxy 并设置 no_proxy="localhost,127.0.0.1"
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab dfs consent
 
-# 5) 将默认 `colab drivemount` 也自动路由至零浏览器通道
+# 5) 验证 Token 必须包含 https://www.googleapis.com/auth/drive 权限
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 colab dfs token
+
+# 6) 将默认 `colab drivemount` 也自动路由至零浏览器通道
 grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
 ```
+
+> **🚨 首次授权避坑铁律（Google OAuth 复选框陷阱）**：
+> 在执行 `colab dfs consent` 弹出的 Google 授权页面中，**「查看、编辑、创建和删除您的所有 Google 云端硬盘文件 (Google Drive)」** 旁边的复选框默认是**未勾选**状态！
+> - 若未勾选直接点击「继续」，签发的 Token 仅有 `openid/email` 权限而缺少 `drive` 权限，挂载时 DriveFS 会报错 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT` (`CANNOT_INIT_CELLOFS`)。
+> - 若遇到该问题，可显式指定单权限重新授权（自动保留已获取的 `user_id` 与 `email`）：
+>   ```bash
+>   python3 ~/.colab-dfs-ext/colab_dfs_ext/dfs_creds.py consent --flavor dfs --scopes "https://www.googleapis.com/auth/drive" --user-id <GaiaId> --email <Email>
+>   ```
 
 ## 4. Agent 标准作业程序 (SOP)
 
@@ -72,7 +84,13 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
    - 若用户用 G4/A100 跑 7B/8B 小模型，触发「大炮打蚊子预警」，建议降级到 **L4 (1.71 CCU/h)**；
    - 若用户用 40G A100 或 L4 跑 32B BF16 或 70B 模型，触发「OOM 显存不足预警」，建议切换到 **G4 (96GB Blackwell)**。
 3. **20TB/30TB 云盘零浏览器静默挂载与持久化（`colab-dfs-ext`）**：
-   - **优先零弹窗挂载**：挂载 `/content/drive` 前，优先在本地终端调用 `~/.local/bin/colab dfs mount -s <session>`（或设置 `COLAB_DFS_DEFAULT=1` 后执行 `colab drivemount`）。该方式无需弹出浏览器确认，且会在云端内部启动 `creds shim` 守护进程自动续期 Token，保障长时微调/视频渲染不掉盘。（若 `colab dfs doctor` 提示缺少凭据，先引导用户执行一次 `colab dfs consent`）。
+   - **优先零弹窗挂载（支持 CLI 与 `colab-mcp` 双模式）**：
+     - 在 `colab` CLI 会话中，调用 `~/.local/bin/colab dfs mount -s <session>`（或设置 `COLAB_DFS_DEFAULT=1` 后执行 `colab drivemount`）。
+     - 在 `colab-mcp` 网页桥接会话中，Agent 可直接读取本地 `~/.config/colab-cli/dfs_credentials.json`，通过 `colab_dfs_ext.drive_mount` 逻辑在云端容器内启动 `127.0.0.1:8012` GCE Metadata Shim 守护进程并拉起 `/opt/google/drive/drive` 完成零弹窗挂载；**挂载成功后必须立即用 `update_cell` 擦除单元格中的明文 Token**，仅保留通过 `127.0.0.1:8012` Shim 接口查询状态的代码。
+   - **路径空格兼容与真实 20TB/30TB 容量校验**：
+     - 直接启动 `/opt/google/drive/drive` 生成的挂载目录为带空格的 `/content/drive/My Drive`，必须在挂载后自动建立软链接 `os.symlink("/content/drive/My Drive", "/content/drive/MyDrive")` 以兼容所有标准路径。
+     - Linux `shutil.disk_usage("/content/drive")` 在 FUSE 上返回的仅是 Colab 容器本地缓存盘容量（~225GB）；应通过容器内 `http://127.0.0.1:8012/computeMetadata/v1/instance/service-accounts/default/token` 获取 Token 调用 `https://www.googleapis.com/drive/v3/about?fields=storageQuota,user`，精准校验并展示 **20.00 TB (5x) / 30.00 TB (20x)** 真实云端容量。
    - **只读防误删模式**：当任务仅为读取 20TB/30TB 云盘中的模型权重进行推理、无需写入云盘时，可使用 `colab dfs mount -s <session> --readonly` 防止脚本误删模型库。
    - **FUSE 假死原地自愈**：若云盘出现 I/O 挂起或 `Transport endpoint is not connected` 报错，严禁直接重启 Runtime 导致环境丢失，应优先执行 `colab dfs mount -s <session> --force --purge-state` 原地清理 DriveFS 状态并重挂。
    - **目录规范与用完释放**：模型权重统一存放在 `/content/drive/MyDrive/AI_Workstation/models`；任务完成后务必提醒用户「断开连接并删除运行时」以停止 CCU 计费。
+

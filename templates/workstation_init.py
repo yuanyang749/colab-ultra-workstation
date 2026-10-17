@@ -70,25 +70,59 @@ def inspect_hardware(task_type: str = "general"):
     return hw_config
 
 
-# --- [Cell 2] 20TB/30TB Google Drive 零浏览器挂载检测与目录初始化 ---
-import os
+# --- [Cell 2] 20TB/30TB Google Drive 零浏览器挂载检测、真实云端配额校验与目录初始化 ---
+import json, os, shutil, urllib.request
 from pathlib import Path
 
-def ensure_drive_mounted(mount_point: str = "/content/drive", allow_browser_fallback: bool = True):
+def ensure_drive_mounted(mount_point: str = "/content/drive", shim_port: int = 8012, allow_browser_fallback: bool = True):
     """
     优先复用 `colab dfs mount` (colab-dfs-ext) 的零浏览器静默挂载结果；
-    若尚未挂载且允许回退，则调用 google.colab.drive.mount。
+    自动补全 `My Drive` -> `MyDrive` 软链接，并通过容器内 GCE Metadata Shim 查询 20TB/30TB 真实云端容量。
     """
-    if os.path.ismount(mount_point):
-        print(f"✅ 检测到 Google Drive (20TB/30TB) 已挂载 ({mount_point})，直接复用（零弹窗）！")
+    my_drive_space = os.path.join(mount_point, "My Drive")
+    my_drive_link = os.path.join(mount_point, "MyDrive")
+
+    if os.path.ismount(mount_point) or os.path.isdir(my_drive_space) or os.path.isdir(my_drive_link):
+        print(f"✅ 检测到 Google Drive 已挂载 ({mount_point})，直接复用（零弹窗）！")
     elif allow_browser_fallback:
-        print(f"ℹ️ 尚未检测到 {mount_point} 挂载（建议由 Agent 在本地执行 `colab dfs mount` 静默挂载），正在回退至浏览器授权挂载...")
+        print(f"ℹ️ 尚未检测到 {mount_point} 挂载（建议由 Agent 执行 `colab dfs mount` 静默挂载），正在回退至浏览器授权挂载...")
         from google.colab import drive
         drive.mount(mount_point)
     else:
-        raise RuntimeError(f"❌ {mount_point} 未挂载！请先在本地执行 `colab dfs mount` 完成零浏览器挂载。")
+        raise RuntimeError(f"❌ {mount_point} 未挂载！请先通过 `colab-dfs-ext` 完成零浏览器挂载。")
 
-    workstation_root = Path(mount_point) / "MyDrive" / "AI_Workstation"
+    # 自动兼容 DriveFS 原生带空格的 `My Drive` 目录名
+    if os.path.isdir(my_drive_space) and not os.path.exists(my_drive_link):
+        try:
+            os.symlink(my_drive_space, my_drive_link)
+        except Exception:
+            pass
+
+    # 若容器内运行了 colab-dfs-ext 的 creds shim，直接查询 Google Drive 20TB/30TB 真实云端配额
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{shim_port}/computeMetadata/v1/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"}
+        )
+        tok = json.load(urllib.request.urlopen(req, timeout=3))["access_token"]
+        about_req = urllib.request.Request(
+            "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName),storageQuota",
+            headers={"Authorization": f"Bearer {tok}"}
+        )
+        about = json.load(urllib.request.urlopen(about_req, timeout=8))
+        quota = about.get("storageQuota", {})
+        limit_b, usage_b = int(quota.get("limit", 0)), int(quota.get("usage", 0))
+        free_b = max(0, limit_b - usage_b)
+        if limit_b >= 1024**4:
+            print(f"☁️ Google Drive 云端真实容量 ({about['user']['emailAddress']}): 总计 {limit_b / (1024**4):.2f} TB | 已用 {usage_b / (1024**3):.2f} GB | 剩余 {free_b / (1024**4):.2f} TB")
+    except Exception:
+        pass
+
+    vm_total, vm_used, vm_free = shutil.disk_usage("/")
+    print(f"🖴 Colab VM 本地缓存盘容量: 总计 {vm_total / (1024**3):.1f} GB | 已用 {vm_used / (1024**3):.1f} GB | 剩余 {vm_free / (1024**3):.1f} GB")
+
+    drive_base = Path(my_drive_link if os.path.exists(my_drive_link) else my_drive_space)
+    workstation_root = drive_base / "AI_Workstation"
     dirs = {
         "models": workstation_root / "models",
         "loras": workstation_root / "loras",

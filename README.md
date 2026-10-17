@@ -51,12 +51,17 @@ uv tool install --with socksio google-colab-cli
 # 2) 一键注入 colab-dfs-ext 零侵入扩展（.pth 钩子）
 curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-dfs-ext/main/install.sh | sh
 
-# 3) 首次一次性 OAuth 授权（后续永久静默挂载）
-colab dfs consent
+# 3) 首次一次性 OAuth 授权（后续永久静默挂载；开启本地代理时需指定 no_proxy="localhost,127.0.0.1"）
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab dfs consent
 
-# 4) 将默认 `colab drivemount` 也路由至零浏览器通道
+# 4) 验证 Token 已包含 https://www.googleapis.com/auth/drive 权限
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 colab dfs token
+
+# 5) 将默认 `colab drivemount` 也路由至零浏览器通道
 echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
 ```
+
+> ⚠️ **首次授权必看（Google OAuth 复选框陷阱）**：在浏览器弹出的 Google 授权确认页中，**「查看、编辑、创建和删除您的所有 Google 云端硬盘文件 (Google Drive)」** 旁边的复选框默认是**未勾选**状态，请务必手动勾选后再点击「继续」，否则签发的 Token 缺少 `drive` 权限会导致挂载报 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`。
 
 常用零浏览器云盘运维命令：
 ```bash
