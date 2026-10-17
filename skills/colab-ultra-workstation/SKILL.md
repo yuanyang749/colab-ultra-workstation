@@ -29,17 +29,52 @@ description: Google AI Ultra 5x (1,000 CCU + 20TB Google Drive) 云端算力智�
 | **`llm_large` (70B ~ 72B & MoE)**<br>*Llama-3.3-70B / Qwen2.5-72B* | **`G4 GPU`** (96GB)<br>**8.71 CCU/h** *(支持 Blackwell 原生 **NVFP4**，4 PFLOPS 算力)* | **`G4 GPU`** (96GB)<br>**8.71 CCU/h** *(70B FP8 权重占 ~72GB + 剩余 24GB 跑超长上下文 KV Cache)* | **`G4 GPU`** (96GB)<br>**8.71 CCU/h** *(70B QLoRA 占 ~48GB，长序列微调不爆显存)* | **为什么 70B 选 G4 甚至比 80G A100/H100 更稳？**<br>70B FP8 权重占 72GB，80G 显卡只剩 8GB 给 KV Cache，上下文稍长必 OOM；**G4 拥有 96GB 显存 + 原生 FP8/FP4**，多出 16GB 全部变成上下文空间！ |
 | **`llm_bandwidth` (极致单流吐字速度)** | **`H100 GPU`** (80GB HBM3, **18.05 CCU/h**) | 仅当总显存 < 75GB 且追求极致 Tokens/s（利用 3.35 TB/s HBM3 带宽）、不在乎双倍 CCU 消耗时选用。 | 不推荐（G4 96GB 性价比高一倍） | 日常 LLM 推理/微调优先用 **L4** 和 **G4**。 |
 
-## 3. Agent 标准作业程序 (SOP)
+## 3. 本地环境自检与一键安装指南 (`colab-mcp` + `google-colab-cli` + `colab-dfs-ext`)
+
+当 Agent 检测到本地缺少 `colab-mcp`、`colab` CLI 或 `colab dfs` 扩展时，按以下步骤自动为用户安装配置（自带系统 SOCKS 代理 `socksio` 兼容）：
+
+### 3.1 安装 `colab-mcp`（网页桥接通道）
+```bash
+uv tool install --with socksio --force git+https://github.com/googlecolab/colab-mcp
+```
+在客户端 `mcp_config.json` 的 `mcpServers` 中注册：
+```json
+"colab-mcp": {
+  "command": "colab-mcp",
+  "args": []
+}
+```
+
+### 3.2 安装 `google-colab-cli` 与 `colab-dfs-ext`（零浏览器静默挂载与无头终端通道）
+```bash
+# 1) 安装官方 google-colab-cli（含 socksio 代理兼容）
+uv tool install --with socksio google-colab-cli
+
+# 2) 一键注入 colab-dfs-ext 零侵入扩展（自动写入 .pth 启动钩子与 ~/.colab-dfs-ext）
+curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-dfs-ext/main/install.sh | sh
+
+# 3) 环境与注入状态自检
+colab dfs doctor
+
+# 4) 首次一次性 OAuth 授权（仅首次需浏览器确认，生成 ~/.config/colab-cli/dfs_credentials.json）
+colab dfs consent
+
+# 5) 将默认 `colab drivemount` 也自动路由至零浏览器通道
+grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
+```
+
+## 4. Agent 标准作业程序 (SOP)
 
 1. **双通道连接与硬件探测**：
    - **通道 A（网页桥接 `colab-mcp`）**：若用户已打开 Colab 网页，调用 `colab-mcp` 的 `get_cells` 并运行 `Cell 1` 的 `inspect_hardware(task_type)`。
-   - **通道 B（无头终端 `colab` CLI）**：若处于无浏览器环境或需后台静默运行，直接通过 `~/.local/bin/colab connect -s <session>` 连接并执行硬件探测。
+   - **通道 B（无头终端 `colab` CLI）**：若处于无浏览器环境或需后台静默运行，直接通过 `~/.local/bin/colab connect -s <session>` 连接并执行硬件探测（若未安装则先按第 3 节自动安装）。
 2. **防浪费与防 OOM 双重把关**：
    - 若用户用 G4/A100 跑 7B/8B 小模型，触发「大炮打蚊子预警」，建议降级到 **L4 (1.71 CCU/h)**；
    - 若用户用 40G A100 或 L4 跑 32B BF16 或 70B 模型，触发「OOM 显存不足预警」，建议切换到 **G4 (96GB Blackwell)**。
 3. **20TB 云盘零浏览器静默挂载与持久化（`colab-dfs-ext`）**：
-   - **优先零弹窗挂载**：挂载 `/content/drive` 前，优先在本地终端调用 `~/.local/bin/colab dfs mount`（或设置 `COLAB_DFS_DEFAULT=1` 后执行 `colab drivemount`）。该方式无需弹出浏览器确认，且会在云端内部启动 `creds shim` 守护进程自动续期 Token，保障长时微调/视频渲染不掉盘。（若本地尚未生成 `~/.config/colab-cli/dfs_credentials.json`，先引导用户执行一次 `colab dfs consent`）。
-   - **只读防误删模式**：当任务仅为读取 20TB 云盘中的模型权重进行推理、无需写入云盘时，可使用 `colab dfs mount --readonly` 防止脚本误删模型库。
-   - **FUSE 假死原地自愈**：若云盘出现 I/O 挂起或 `Transport endpoint is not connected` 报错，严禁直接重启 Runtime 导致环境丢失，应优先执行 `colab dfs mount --force --purge-state` 原地清理 DriveFS 状态并重挂。
+   - **优先零弹窗挂载**：挂载 `/content/drive` 前，优先在本地终端调用 `~/.local/bin/colab dfs mount -s <session>`（或设置 `COLAB_DFS_DEFAULT=1` 后执行 `colab drivemount`）。该方式无需弹出浏览器确认，且会在云端内部启动 `creds shim` 守护进程自动续期 Token，保障长时微调/视频渲染不掉盘。（若 `colab dfs doctor` 提示缺少凭据，先引导用户执行一次 `colab dfs consent`）。
+   - **只读防误删模式**：当任务仅为读取 20TB 云盘中的模型权重进行推理、无需写入云盘时，可使用 `colab dfs mount -s <session> --readonly` 防止脚本误删模型库。
+   - **FUSE 假死原地自愈**：若云盘出现 I/O 挂起或 `Transport endpoint is not connected` 报错，严禁直接重启 Runtime 导致环境丢失，应优先执行 `colab dfs mount -s <session> --force --purge-state` 原地清理 DriveFS 状态并重挂。
    - **目录规范与用完释放**：模型权重统一存放在 `/content/drive/MyDrive/AI_Workstation/models`；任务完成后务必提醒用户「断开连接并删除运行时」以停止 CCU 计费。
+
 
