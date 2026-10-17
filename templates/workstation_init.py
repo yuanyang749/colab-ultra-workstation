@@ -1,4 +1,4 @@
-# === Google AI Ultra 5x 云端工作站标准初始化模板 ===
+# === Google AI Ultra (5x / 20x) 云端工作站标准初始化模板 ===
 # 由 colab-ultra-workstation 技能自动注入到 Colab Notebook
 
 # --- [Cell 1] 智能硬件识别、费率监控与任务匹配顾问 ---
@@ -38,7 +38,7 @@ def inspect_hardware(task_type: str = "general"):
             profile = {**profile, "tier": "A100-80G", "ccu_h": 7.52}
 
     ccu_h = profile["ccu_h"]
-    hours_left = f"{1000 / ccu_h:.0f} 小时" if ccu_h > 0 else "♾️ 无限 (0 CCU)"
+    hours_left = f"5x(1000 CCU)≈{1000 / ccu_h:.0f}h / 20x(2000 CCU)≈{2000 / ccu_h:.0f}h" if ccu_h > 0 else "♾️ 无限 (0 CCU)"
     
     hw_config = {
         "tier": profile["tier"],
@@ -53,7 +53,7 @@ def inspect_hardware(task_type: str = "general"):
     }
 
     print(f"🖥️ 当前运行时: [{hw_config['tier']}] {gpu_name} | 显存: {vram_gb:.1f} GB | 架构: {profile['arch']}")
-    print(f"💰 算力费率  : {ccu_h} CCU/小时 (按 1,000 CCU 测算可跑: {hours_left})")
+    print(f"💰 算力费率  : {ccu_h} CCU/小时 (月度续航: {hours_left})")
     print(f"⚙️ 自动调优  : Offload={hw_config['enable_cpu_offload']} | 推荐精度={hw_config['recommended_dtype']} | 原生FP8={profile['fp8']} | 原生FP4={profile['fp4']}")
 
     if task_type in TASK_RECOMMENDATIONS:
@@ -70,7 +70,7 @@ def inspect_hardware(task_type: str = "general"):
     return hw_config
 
 
-# --- [Cell 2] 20TB Google Drive 零浏览器挂载检测与目录初始化 ---
+# --- [Cell 2] 20TB/30TB Google Drive 零浏览器挂载检测与目录初始化 ---
 import os
 from pathlib import Path
 
@@ -80,7 +80,7 @@ def ensure_drive_mounted(mount_point: str = "/content/drive", allow_browser_fall
     若尚未挂载且允许回退，则调用 google.colab.drive.mount。
     """
     if os.path.ismount(mount_point):
-        print(f"✅ 检测到 20TB Google Drive 已挂载 ({mount_point})，直接复用（零弹窗）！")
+        print(f"✅ 检测到 Google Drive (20TB/30TB) 已挂载 ({mount_point})，直接复用（零弹窗）！")
     elif allow_browser_fallback:
         print(f"ℹ️ 尚未检测到 {mount_point} 挂载（建议由 Agent 在本地执行 `colab dfs mount` 静默挂载），正在回退至浏览器授权挂载...")
         from google.colab import drive
@@ -101,5 +101,6 @@ def ensure_drive_mounted(mount_point: str = "/content/drive", allow_browser_fall
 
     os.environ["HF_HOME"] = str(dirs["hf_cache"])
     os.environ["HUGGINGFACE_HUB_CACHE"] = str(dirs["hf_cache"] / "hub")
-    print(f"✅ HF_HOME 已永久绑定至 20TB 云盘: {os.environ['HF_HOME']}")
+    print(f"✅ HF_HOME 已永久绑定至 Google Drive: {os.environ['HF_HOME']}")
     return dirs
+
