@@ -68,3 +68,38 @@ def inspect_hardware(task_type: str = "general"):
         else:
             print(f"\n💡 [选卡建议] 任务「{rec['desc']}」最优推荐为 [{best_str}]，当前为 [{hw_config['tier']}]。")
     return hw_config
+
+
+# --- [Cell 2] 20TB Google Drive 零浏览器挂载检测与目录初始化 ---
+import os
+from pathlib import Path
+
+def ensure_drive_mounted(mount_point: str = "/content/drive", allow_browser_fallback: bool = True):
+    """
+    优先复用 `colab dfs mount` (colab-dfs-ext) 的零浏览器静默挂载结果；
+    若尚未挂载且允许回退，则调用 google.colab.drive.mount。
+    """
+    if os.path.ismount(mount_point):
+        print(f"✅ 检测到 20TB Google Drive 已挂载 ({mount_point})，直接复用（零弹窗）！")
+    elif allow_browser_fallback:
+        print(f"ℹ️ 尚未检测到 {mount_point} 挂载（建议由 Agent 在本地执行 `colab dfs mount` 静默挂载），正在回退至浏览器授权挂载...")
+        from google.colab import drive
+        drive.mount(mount_point)
+    else:
+        raise RuntimeError(f"❌ {mount_point} 未挂载！请先在本地执行 `colab dfs mount` 完成零浏览器挂载。")
+
+    workstation_root = Path(mount_point) / "MyDrive" / "AI_Workstation"
+    dirs = {
+        "models": workstation_root / "models",
+        "loras": workstation_root / "loras",
+        "hf_cache": workstation_root / "hf_cache",
+        "outputs": workstation_root / "outputs",
+    }
+    for name, path in dirs.items():
+        path.mkdir(parents=True, exist_ok=True)
+        print(f"📁 [{name}] 就绪: {path}")
+
+    os.environ["HF_HOME"] = str(dirs["hf_cache"])
+    os.environ["HUGGINGFACE_HUB_CACHE"] = str(dirs["hf_cache"] / "hub")
+    print(f"✅ HF_HOME 已永久绑定至 20TB 云盘: {os.environ['HF_HOME']}")
+    return dirs

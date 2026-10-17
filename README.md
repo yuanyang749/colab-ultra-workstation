@@ -40,7 +40,33 @@ uv tool install --with socksio --force git+https://github.com/googlecolab/colab-
 }
 ```
 
-### 2. 安装 `colab-ultra-workstation` 技能
+### 2. 安装 `google-colab-cli` 与 `colab-dfs-ext`（零浏览器静默挂载 20TB 云盘）
+
+传统 `drive.mount('/content/drive')` 每次重连都需在浏览器手动点 OAuth 弹窗，且网页断开易导致临时 Token 过期掉盘。配合 [`deluxebear/colab-dfs-ext`](https://github.com/deluxebear/colab-dfs-ext) 可实现**一次授权、永久零浏览器秒级挂载**，并在云端内部启动 `creds shim` 后台自动续期 Token：
+
+```bash
+# 1) 安装官方 google-colab-cli（含 socksio 代理兼容）
+uv tool install --with socksio google-colab-cli
+
+# 2) 一键注入 colab-dfs-ext 零侵入扩展（.pth 钩子）
+curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-dfs-ext/main/install.sh | sh
+
+# 3) 首次一次性 OAuth 授权（后续永久静默挂载）
+colab dfs consent
+
+# 4) 将默认 `colab drivemount` 也路由至零浏览器通道
+echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
+```
+
+常用零浏览器云盘运维命令：
+```bash
+colab dfs mount -s <session>                       # 秒级静默挂载 /content/drive（含后台 Token 自动续期）
+colab dfs mount -s <session> --readonly            # 只读挂载（保护 20TB 模型库防脚本误删）
+colab dfs mount -s <session> --force --purge-state # DriveFS/FUSE 假死原地抢救重挂（无需重启 Runtime）
+colab dfs status -s <session>                      # 查看云盘挂载与 Token 守护进程状态
+```
+
+### 3. 安装 `colab-ultra-workstation` 技能
 
 ```bash
 git clone https://github.com/yuanyang749/colab-ultra-workstation.git ~/.agents/skills/colab-ultra-workstation
@@ -48,14 +74,16 @@ git clone https://github.com/yuanyang749/colab-ultra-workstation.git ~/.agents/s
 
 ---
 
-## 🧠 核心特性：双层智能硬件调度与防烧钱守门员
+## 🧠 核心特性：双通道遥控、智能选卡矩阵与防烧钱守门员
 
 1. **全尺寸任务选卡矩阵（视频 + 基础 LLM）**：
    - **`CPU` (0 CCU/h)**：挂载 20TB Google Drive、从 HuggingFace 首次下载几十 GB 模型权重。
    - **`T4 GPU` (15GB, 1.19 CCU/h)**：1.5B ~ 9B LLM 的 4-bit 量化推理。
    - **`L4 GPU` (22.5GB Ada, 1.71 CCU/h)**：Wan2.1-1.3B / Flux 轻量生成；1.5B~9B 满血 BF16/FP8 推理与微调；**32B 4-bit (AWQ/Q4) 极限卡位推理**。
    - **`G4 GPU` (96GB RTX PRO 6000 Blackwell, 6.7~8.71 CCU/h)**：**主力王炸卡（全面替代 A100/H100）**。具备 1 PFLOPS BF16 / 2 PFLOPS FP8 / 4 PFLOPS FP4 算力，96GB 超大显存支持 **Wan2.1-14B / HunyuanVideo 100% 显存常驻（零 CPU Offload）**，以及 **32B/70B LLM 的 FP8 超长上下文推理与 QLoRA 微调**。
-2. **防烧钱硬拦截（Burn-Rate Guard）**：
+2. **零浏览器静默挂载与不断联守护（`colab-dfs-ext`）**：
+   - 彻底告别 `drive.mount` 人工弹窗确认，支持 `--readonly` 只读防误删挂载、云端后台 Token 自动续期（合盖睡觉跑长任务不掉盘）以及 FUSE 假死原地重挂。
+3. **防烧钱硬拦截（Burn-Rate Guard）**：
    - 当检测到正挂载高价显卡（G4 / A100 / H100，$\ge 5$ CCU/h）去首次下载大模型时，自动触发拦截提醒，杜绝开着高价显卡干等下载的算力浪费。
-3. **大炮打蚊子预警**：
+4. **大炮打蚊子预警**：
    - 当检测到使用 G4/H100 运行 <9B 小模型或轻量任务时，自动提醒降级至 L4/T4 节省 CCU。

@@ -1,11 +1,11 @@
 ---
 name: colab-ultra-workstation
-description: Google AI Ultra 5x (1,000 CCU + 20TB Google Drive) 云端算力智能调度与 colab-mcp 工作站规范。当用户要求连接/使用 Google Colab、跑 AI 视频模型（Wan2.1/Hunyuan/LTX/ComfyUI）、跑基础大语言模型 LLM（7B/14B/32B/70B 推理或微调）、下载模型权重到 Google Drive 或咨询 Colab 显卡选择（CPU/T4/L4/G4/A100/H100）时必须激活此技能。
+description: Google AI Ultra 5x (1,000 CCU + 20TB Google Drive) 云端算力智能调度与 colab-mcp / colab-dfs-ext 工作站规范。当用户要求连接/使用 Google Colab、零浏览器静默挂载 Google Drive (`colab dfs mount`)、跑 AI 视频模型（Wan2.1/Hunyuan/LTX/ComfyUI）、跑基础大语言模型 LLM（7B/14B/32B/70B 推理或微调）、下载模型权重到 Google Drive 或咨询 Colab 显卡选择（CPU/T4/L4/G4/A100/H100）时必须激活此技能。
 ---
 
 # Google AI Ultra 5x 云端工作站与智能硬件调度规范
 
-本技能指导 Agent 通过 `colab-mcp` 高效操控用户的 Google Colab 云端工作站，并根据任务类型（AI 视频生成、不同参数规模的基础 LLM 推理/微调、大文件下载）自动分析、推荐与校验最优 GPU 档位，最大化利用每月 1,000 CCU 与 20TB Google Drive。
+本技能指导 Agent 通过 **`colab-mcp`（网页桥接通道）** 或 **`google-colab-cli` + `colab-dfs-ext`（纯终端无浏览器通道）** 高效操控用户的 Google Colab 云端工作站，并根据任务类型（AI 视频生成、不同参数规模的基础 LLM 推理/微调、大文件下载）自动分析、推荐与校验最优 GPU 档位，最大化利用每月 1,000 CCU 与 20TB Google Drive。
 
 ## 1. 视频与多模态硬件调度矩阵
 
@@ -31,8 +31,15 @@ description: Google AI Ultra 5x (1,000 CCU + 20TB Google Drive) 云端算力智�
 
 ## 3. Agent 标准作业程序 (SOP)
 
-1. **连接与探测**：调用 `colab-mcp` 的 `get_cells` 并运行 `Cell 1` 的 `inspect_hardware(task_type)`。
+1. **双通道连接与硬件探测**：
+   - **通道 A（网页桥接 `colab-mcp`）**：若用户已打开 Colab 网页，调用 `colab-mcp` 的 `get_cells` 并运行 `Cell 1` 的 `inspect_hardware(task_type)`。
+   - **通道 B（无头终端 `colab` CLI）**：若处于无浏览器环境或需后台静默运行，直接通过 `~/.local/bin/colab connect -s <session>` 连接并执行硬件探测。
 2. **防浪费与防 OOM 双重把关**：
    - 若用户用 G4/A100 跑 7B/8B 小模型，触发「大炮打蚊子预警」，建议降级到 **L4 (1.71 CCU/h)**；
    - 若用户用 40G A100 或 L4 跑 32B BF16 或 70B 模型，触发「OOM 显存不足预警」，建议切换到 **G4 (96GB Blackwell)**。
-3. **20TB 云盘持久化**：模型权重统一存放在 `/content/drive/MyDrive/AI_Workstation/models`，跑完提醒用户「断开连接并删除运行时」。
+3. **20TB 云盘零浏览器静默挂载与持久化（`colab-dfs-ext`）**：
+   - **优先零弹窗挂载**：挂载 `/content/drive` 前，优先在本地终端调用 `~/.local/bin/colab dfs mount`（或设置 `COLAB_DFS_DEFAULT=1` 后执行 `colab drivemount`）。该方式无需弹出浏览器确认，且会在云端内部启动 `creds shim` 守护进程自动续期 Token，保障长时微调/视频渲染不掉盘。（若本地尚未生成 `~/.config/colab-cli/dfs_credentials.json`，先引导用户执行一次 `colab dfs consent`）。
+   - **只读防误删模式**：当任务仅为读取 20TB 云盘中的模型权重进行推理、无需写入云盘时，可使用 `colab dfs mount --readonly` 防止脚本误删模型库。
+   - **FUSE 假死原地自愈**：若云盘出现 I/O 挂起或 `Transport endpoint is not connected` 报错，严禁直接重启 Runtime 导致环境丢失，应优先执行 `colab dfs mount --force --purge-state` 原地清理 DriveFS 状态并重挂。
+   - **目录规范与用完释放**：模型权重统一存放在 `/content/drive/MyDrive/AI_Workstation/models`；任务完成后务必提醒用户「断开连接并删除运行时」以停止 CCU 计费。
+
