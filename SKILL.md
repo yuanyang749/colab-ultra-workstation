@@ -84,13 +84,22 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
    - 若用户用 G4/A100 跑 7B/8B 小模型，触发「大炮打蚊子预警」，建议降级到 **L4 (1.71 CCU/h)**；
    - 若用户用 40G A100 或 L4 跑 32B BF16 或 70B 模型，触发「OOM 显存不足预警」，建议切换到 **G4 (96GB Blackwell)**。
 3. **20TB/30TB 云盘零浏览器静默挂载与持久化（`colab-dfs-ext`）**：
-   - **优先零弹窗挂载（支持 CLI 与 `colab-mcp` 双模式）**：
-     - 在 `colab` CLI 会话中，调用 `~/.local/bin/colab dfs mount -s <session>`（或设置 `COLAB_DFS_DEFAULT=1` 后执行 `colab drivemount`）。
-     - 在 `colab-mcp` 网页桥接会话中，Agent 可直接读取本地 `~/.config/colab-cli/dfs_credentials.json`，通过 `colab_dfs_ext.drive_mount` 逻辑在云端容器内启动 `127.0.0.1:8012` GCE Metadata Shim 守护进程并拉起 `/opt/google/drive/drive` 完成零弹窗挂载；**挂载成功后必须立即用 `update_cell` 擦除单元格中的明文 Token**，仅保留通过 `127.0.0.1:8012` Shim 接口查询状态的代码。
+   - **优先零弹窗挂载（支持 CLI 与 `colab-mcp` 双模式一键脚本）**：
+     - **CLI 模式**：调用 `~/.local/bin/colab dfs mount -s <session>`（或设置 `COLAB_DFS_DEFAULT=1` 后执行 `colab drivemount`）。
+     - **`colab-mcp` 网页模式（零手写代码）**：Agent 直接在本地运行 `python3 ~/.gemini/config/skills/colab-ultra-workstation/scripts/mcp_dfs_mount.py` 生成挂载载荷，通过 `colab-mcp` 的 `add_code_cell` / `run_code_cell` 执行；**挂载成功后立即运行 `python3 ~/.gemini/config/skills/colab-ultra-workstation/scripts/mcp_dfs_mount.py --sanitize` 并用 `update_cell` 擦除单元格中的明文 Token**。
+   - **云盘常驻模块免重写（`workstation_init.py`）**：
+     - 云盘挂载后，直接从 `/content/drive/MyDrive/AI_Workstation/workstation_init.py` 导入标准函数（若不存在则从仓库自动同步至云盘），无需每次在记事本中重复粘贴百行初始化代码：
+       ```python
+       import sys; sys.path.insert(0, "/content/drive/MyDrive/AI_Workstation")
+       from workstation_init import inspect_hardware, ensure_drive_mounted, smart_download_model
+       HW_CONFIG = inspect_hardware("general")
+       DIRS = ensure_drive_mounted("/content/drive")
+       ```
    - **路径空格兼容与真实 20TB/30TB 容量校验**：
-     - 直接启动 `/opt/google/drive/drive` 生成的挂载目录为带空格的 `/content/drive/My Drive`，必须在挂载后自动建立软链接 `os.symlink("/content/drive/My Drive", "/content/drive/MyDrive")` 以兼容所有标准路径。
-     - Linux `shutil.disk_usage("/content/drive")` 在 FUSE 上返回的仅是 Colab 容器本地缓存盘容量（~225GB）；应通过容器内 `http://127.0.0.1:8012/computeMetadata/v1/instance/service-accounts/default/token` 获取 Token 调用 `https://www.googleapis.com/drive/v3/about?fields=storageQuota,user`，精准校验并展示 **20.00 TB (5x) / 30.00 TB (20x)** 真实云端容量。
+     - 直接启动 `/opt/google/drive/drive` 生成的挂载目录为带空格的 `/content/drive/My Drive`，自动建立软链接 `os.symlink("/content/drive/My Drive", "/content/drive/MyDrive")` 以兼容所有标准路径。
+     - 通过容器内 `http://127.0.0.1:8012/computeMetadata/v1/instance/service-accounts/default/token` 获取 Token 调用 `https://www.googleapis.com/drive/v3/about?fields=storageQuota,user`，精准校验并展示 **20.00 TB (5x) / 30.00 TB (20x)** 真实云端容量。
    - **只读防误删模式**：当任务仅为读取 20TB/30TB 云盘中的模型权重进行推理、无需写入云盘时，可使用 `colab dfs mount -s <session> --readonly` 防止脚本误删模型库。
    - **FUSE 假死原地自愈**：若云盘出现 I/O 挂起或 `Transport endpoint is not connected` 报错，严禁直接重启 Runtime 导致环境丢失，应优先执行 `colab dfs mount -s <session> --force --purge-state` 原地清理 DriveFS 状态并重挂。
    - **目录规范与用完释放**：模型权重统一存放在 `/content/drive/MyDrive/AI_Workstation/models`；任务完成后务必提醒用户「断开连接并删除运行时」以停止 CCU 计费。
+
 

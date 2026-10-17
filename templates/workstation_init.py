@@ -138,3 +138,28 @@ def ensure_drive_mounted(mount_point: str = "/content/drive", shim_port: int = 8
     print(f"✅ HF_HOME 已永久绑定至 Google Drive: {os.environ['HF_HOME']}")
     return dirs
 
+
+# --- [Cell 3] 防烧钱守门员与模型高速下载器 ---
+def smart_download_model(repo_id: str, hw_config: dict, dirs: dict, force_on_gpu: bool = False):
+    """
+    先检查 Google Drive 20TB/30TB 云盘是否已缓存该模型；
+    若未缓存且当前挂载了高价显卡 (>= 5.0 CCU/h)，默认拦截并提示切回 CPU 下载。
+    """
+    target_dir = Path(dirs["models"]) / repo_id.replace("/", "--")
+    if target_dir.exists() and any(target_dir.iterdir()):
+        print(f"⚡ [命中云盘缓存] 模型已存在于 Google Drive，直接零流量加载: {target_dir}")
+        return target_dir
+
+    ccu_h = hw_config.get("ccu_per_hour", 0.0)
+    if ccu_h >= 5.0 and not force_on_gpu:
+        raise RuntimeError(
+            f"🚨 [防烧钱硬拦截] 当前正挂载高价显卡 [{hw_config.get('tier')}] ({ccu_h} CCU/h)！\n"
+            f"请先切回 CPU (0 CCU/h) 运行时将 `{repo_id}` 下载至 Google Drive，或传 `force_on_gpu=True` 强制下载。"
+        )
+
+    from huggingface_hub import snapshot_download
+    print(f"⬇️ 正在高速下载 `{repo_id}` 至 Google Drive ({target_dir})...")
+    snapshot_download(repo_id=repo_id, local_dir=str(target_dir))
+    print(f"✅ 下载完成并已持久化至云盘: {target_dir}")
+    return target_dir
+

@@ -11,8 +11,10 @@
 ```text
 colab-ultra-workstation/
 ├── SKILL.md                                           # Agent 智能硬件调度与防烧钱拦截技能定义
+├── scripts/
+│   └── mcp_dfs_mount.py                               # colab-mcp 零浏览器挂载载荷一键生成器（含凭证擦除）
 ├── templates/
-│   └── workstation_init.py                            # 云端硬件探测与参数自动调优代码模板
+│   └── workstation_init.py                            # 云端常驻硬件探测、配额校验与防烧钱下载器模块
 ├── notebooks/
 │   └── Google_AI_Ultra_Workstation.ipynb              # 完整实测 Colab 工作站记事本（含硬件顾问、20TB/30TB 云盘挂载、防烧钱下载器、Qwen2.5-1.5B-X-Writer 实测）
 └── skills/
