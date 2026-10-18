@@ -115,18 +115,27 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
      - 销毁实例前必须通过 Google Drive v3 API (`files.list`) 核验目标文件已全部出现在云端且 `size > 0`（参见 `scripts/setup_minimax_h3_comfyui.py` Step 5）。
    - **CLI 通道主动释放**：调用 `~/.local/bin/colab stop -s <session>` 销毁指定会话。
    - **`colab-mcp` 网页通道主动释放**：在单元格中执行 `from google.colab import runtime; runtime.unassign()`（或 `workstation_init.release_runtime()`）。
-   - **🚨 终极清场指令（强杀浏览器残留的匿名 `HIGH_RAM` 幽灵实例）**：
-     - 用户在浏览器中手动关闭标签页或仅点击“断开连接”时，Colab 服务端往往会残留一个未命名的后台实例（如 `HIGH_RAM` CPU 持续偷跑 `0.26 CCU/h`），且普通 `colab stop` 因无本地会话名无法直接关闭。
-     - 每次收工后，Agent 必须执行以下全量清场与核验命令，确保 `Active assignments: 0` 且 `Usage rate: 0.00/hr`：
+   - **🚨 强制双轨计费核验与标准化释放报告（Mandatory CCU Meter & Release Report）**：
+     - **双轨核验原理（开机打点 + 停机双轨核验）**：Google Colab 后台账单为周期性批量扣款，若单次任务仅运行 1~2 分钟，停机瞬间 API 余额可能尚未刷出扣款。因此必须采取**双轨制**：
+       1. **开机瞬间打点**：记录 `{session, gpu, rate, start_time, start_balance}`；
+       2. **关机瞬间结算**：强杀全部实例并核验 `Active assignments: 0`，同时计算 `运行时长`、`理论消耗 = (时长/3600) × 费率` 与 `API 实际扣除 = 开机余额 - 关机余额`。
+     - **一键自动化命令**：
+       - 开机打点：`python3 scripts/colab_meter.py start -s <session> -g <G4|L4|T4>`
+       - 停机释放结算：`python3 scripts/colab_meter.py stop -s <session>`
+     - **约定返回格式（Agent 每次完成任务释放算力后必须严格按此模板汇报，禁止省略）**：
+       ```text
+       ✅ 算力释放与计费核验报告：
+       • 实例释放状态: Active assignments: 0
+       • 实时消耗速率: 0.00 CCU/h (已完全停止计费)
+       • 本次运行机型: G4 (NVIDIA RTX PRO 6000 Blackwell, 8.71 CCU/h)
+       • 本次运行时长: X 分 Y 秒
+       • 本次实际消耗: Z.ZZ CCU (按时长精确折算)
+       • 当前账户余额: XXX.XX CCU
+       ```
+     - 全量底层兜底清场与余额核验：
        ```bash
        https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" \
-         ~/.local/share/uv/tools/google-colab-cli/bin/python -c '
-       from colab_cli.common import state
-       _, assignments = state.sync_sessions()
-       for a in assignments:
-           print("Unassigning:", a.endpoint, a.accelerator.value, a.machine_shape.name)
-           state.client.unassign(a.endpoint)
-       ' && https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 ~/.local/bin/colab usage
+         ~/.local/share/uv/tools/google-colab-cli/bin/python scripts/colab_meter.py stop
        ```
 
 5. **全自动跨档位「零浪费」流水线闭环（Zero-Burn Pipeline & 严禁 G4 空转）**：
