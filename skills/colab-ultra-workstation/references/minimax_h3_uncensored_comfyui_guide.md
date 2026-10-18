@@ -163,33 +163,36 @@ colab run scripts/setup_minimax_h3_comfyui.py -s h3-setup
 colab stop -s h3-setup
 ```
 
-### 第二步：G4 (96GB Blackwell) 3 分钟极速预热与满血显存常驻渲染（随用随开，跑完即焚）
-> 💡 **备料省钱铁律**：点火 G4 之前，先在本地（`0 CCU`）把今天要拍的所有 `1344 × 768` 哑光首帧大图和台词提示词全部备好；点火后运行下方极速预热脚本（约 2.5~3 分钟即可把 60GB+ 核心模型预热并锁入 96GB 显存），随后批量连发渲染！
+### 第二步：G4 (96GB Blackwell) 90 秒双通道 NVMe 极速冷启动与显存常驻渲染（随用随开，跑完即焚）
+> 💡 **备料省钱铁律**：点火 G4 之前，先在本地（`0 CCU`）把今天要拍的所有 `1344 × 768` 哑光首帧大图和台词提示词全部备好；点火后通过 `nohup` 后台运行下方双通道 NVMe 极速脚本（实测仅需 **75.4 秒** 即可将 `41.42 GB` 核心权重以 **463 MB/s** 拉入本地 NVMe SSD，再花 **~16 秒** 以 `2.5 GB/s` 灌入 96GB 显存），随后批量连发渲染！
 
 ```bash
-# 1. 启动 96GB 显存的 G4 Blackwell 实例（8.71 CCU/h）并静默挂载云盘
-colab new -s h3-work --gpu G4
-colab dfs mount -s h3-work
+# 1. 零浏览器启动 96GB 显存的 G4 Blackwell 实例（8.71 CCU/h）并静默挂载云盘（~9.5s）
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab new -s h3-work --gpu G4
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab dfs mount -s h3-work
 
-# 2. 运行 3 分钟极速启动脚本（4 线程 16MB 大块顺序预热 60GB+ 模型 + 启动 ComfyUI --highvram --disable-mmap + Cloudflare 隧道）
-colab run scripts/launch_g4_comfyui_fast.py -s h3-work
+# 2. 后台脱机启动双通道 NVMe 极速脚本（75.4s 拉满 41.42GB 至本地 NVMe SSD + 启动 ComfyUI --highvram --disable-mmap + Cloudflare 隧道）
+B64=$(base64 -i scripts/launch_g4_comfyui_fast.py | tr -d '\n')
+echo "import base64, subprocess; from pathlib import Path; Path('/tmp/launch_g4_comfyui_fast.py').write_bytes(base64.b64decode('$B64')); subprocess.Popen('nohup python3 -u /tmp/launch_g4_comfyui_fast.py > /tmp/fast_boot.log 2>&1 &', shell=True); print('STARTED')" | \
+  https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" perl -e 'alarm 20; exec @ARGV' colab exec -s h3-work
 
 # 3. 渲染结束立即销毁所有实例停止计费，并核验 CCU 余额为 0.00/hr
-colab stop -s h3-work
-colab usage
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab stop -s h3-work
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab usage
 ```
 
 ---
 
-## 6. 🚨 实战踩坑与避坑总表（7 大血泪教训汇总）
+## 6. 🚨 实战踩坑与避坑总表（8 大血泪教训汇总）
 
 | 序号 | 坑点现象 | 根本原因 | 标准解决方案 |
 | :---: | :--- | :--- | :--- |
 | **1** | **首次 `colab dfs consent` 授权后挂载报 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`** | Google OAuth 细粒度授权页面中，「查看、编辑、创建和删除您的所有 Google Drive 文件」复选框**默认未勾选**。 | 授权页面必须手动勾选 Drive 复选框；或直接用 `--scopes "https://www.googleapis.com/auth/drive"` 单权限强制重签。 |
 | **2** | **本地执行 `colab` 或 `dfs_creds` 卡死 / OAuth `127.0.0.1` 回调失败** | 本地终端未走代理无法访问 `googleapis.com`，或开启代理但未排除 `localhost` 导致本地回调被代理劫持。 | 统一加上：`https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1"`。 |
 | **3** | **大模型 `shutil.move` 进 `/content/drive` 后立刻 `colab stop` 导致文件丢失** | DriveFS 采用本地缓存（`/root/.config/Google/DriveFS`）+ 后台异步上传机制，`mv` 返回仅代表写入本地缓存，立即销毁容器会中断后台上传。 | 关机前必须调用 Google Drive v3 API (`files.list`) 确认所有文件已在云端可见且 `size > 100000` 后再执行 `colab stop`。 |
-| **4** | **ComfyUI 首次从云盘加载 60GB+ `.safetensors` 耗时近 38 分钟（白烧 ~5.5 CCU）** | `safetensors` 默认使用 `mmap`（4KB 随机分页），在 FUSE 挂载盘上触发数百万次小块请求，读取速度跌至 ~25 MB/s。 | 直接使用 `scripts/launch_g4_comfyui_fast.py`（4 线程 16MB 大块顺序预热提升至 250~400 MB/s，并开启 `--disable-mmap --highvram`，3 分钟内将 62GB 权重永久常驻 G4 96GB 显存，第 2 条起 0 秒读盘）。 |
+| **4** | **ComfyUI 直接从 `/content/drive` 加载 `41.42 GB` 模型极慢（`mmap` 25 MB/s 耗 28 分钟；单流顺序读 62.7 MB/s 耗 11 分钟；纯 Drive API 限速 140 MB/s 耗 5 分钟）** | Google Drive FUSE 对 `mmap` 4KB 随机读限速 ~25 MB/s，对单文件句柄顺序读限速 ~62.7 MB/s，且 Google Drive v3 API 按单账号限速 ~140 MB/s。 | 直接使用 `scripts/launch_g4_comfyui_fast.py` 的 **「双通道并发引擎（Drive v3 API `150 MB/s` + HF CDN `450 MB/s`）」**：实测仅需 **75.4 秒（均速 463 MB/s）** 即可把全部 `41.42 GB` 权重落入本地 NVMe SSD (`/content/fast_models`)，ComfyUI 再从本地 NVMe 以 **`2.5 GB/s`（约 16 秒）** 读入 96GB 显存并永久常驻（`--highvram --disable-mmap`）。 |
 | **5** | **生成的视频人物满脸“猪油高光 / 塑料蜡像感”** | 拿 `fl2va`（首尾帧模型）裸跑低分辨率 `480p` 纯文生视频 (T2V)，且提示词写了 `glowing/dewy skin`、Turbo LoRA 开满 `1.0` 导致对比度过曝。 | 严格执行 **4.5 节去油四法则**：单反级哑光高清首帧 (`first_frame`) + 原生 `1344×768` + `MiniMaxH3SigmaShift (12.0/3.0)` + `Turbo 0.85 (10步)`。 |
 | **6** | **在浏览器手动点“断开连接”后，`colab usage` 仍显示 `Active assignments: 1` (`0.26/hr`)** | 浏览器端普通断开或切换运行时会在服务端残留未命名的 `HIGH_RAM` CPU 幽灵实例（`name="?"`），普通 `colab stop` 因无会话名无法关闭。 | 运行 `SKILL.md` 4.4 节中的 **`state.client.unassign(a.endpoint)` 全量清场指令**，遍历服务端 `assignments` 强杀所有残留实例，确保 `Usage rate: 0.00/hr`。 |
-| **7** | **先开着 G4 (`8.71 CCU/h`) 再去现场想剧本、生首帧底图、调工作流，导致高价显卡大量时间空转浪费** | 把“0 算力的本地备料阶段（生成/挑选 `1344×768` 哑光首帧图、编写台词与 JSON）”和“G4 渲染阶段”混在一起，导致 G4 开机后大半时间在等人工决策和生图。 | 严格执行 **「备料在本地 (0 CCU)，点火即连发」**：必须在 G4 开机前先于本地备齐所有满意的 `1344×768` 哑光首帧底图与提示词队列；G4 点火后仅跑 `launch_g4_comfyui_fast.py`（3 分钟预热）+ 批量连发渲染（110s/条），跑完立即关机。 |
+| **7** | **先开着 G4 (`8.71 CCU/h`) 再去现场想剧本、生首帧底图、调工作流，导致高价显卡大量时间空转浪费** | 把“0 算力的本地备料阶段（生成/挑选 `1344×768` 哑光首帧图、编写台词与 JSON）”和“G4 渲染阶段”混在一起，导致 G4 开机后大半时间在等人工决策和生图。 | 严格执行 **「备料在本地 (0 CCU)，点火即连发」**：必须在 G4 开机前先于本地备齐所有满意的 `1344×768` 哑光首帧底图与提示词队列；G4 点火后仅跑 `launch_g4_comfyui_fast.py`（90 秒极速冷启动）+ 批量连发渲染（110s/条），跑完立即关机。 |
+| **8** | **直接用 `colab exec -f` 跑长耗时任务时偶发 `RuntimeError: Connection was lost.` 且本地进程无限假死挂起** | `jupyter_kernel_client` 的 WebSocket 在长耗时阻塞期间闪断后，后台守护线程未清理退出，导致本地 CLI 假死挂住。 | 所有超过 15 秒的远程任务一律通过 **`subprocess.Popen('nohup python3 -u ... > /tmp/task.log 2>&1 &', shell=True)`** 脱机启动（1 秒返回），配合 `perl -e 'alarm 20; exec @ARGV' colab exec` 非阻塞轮询日志。 |
 
