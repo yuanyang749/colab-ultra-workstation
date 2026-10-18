@@ -1,6 +1,6 @@
 ---
 name: colab-ultra-workstation
-description: Google AI Ultra (5x: 1,000 CCU + 20TB / 20x: 2,000 CCU + 30TB Google Drive) 云端算力智能调度与 colab-mcp / colab-dfs-ext 工作站规范。当用户要求连接/使用 Google Colab、零浏览器静默挂载 Google Drive (`colab dfs mount`)、跑 AI 视频模型（Wan2.1/Hunyuan/LTX/ComfyUI）、跑基础大语言模型 LLM（7B/14B/32B/70B 推理或微调）、下载模型权重到 Google Drive 或咨询 Colab 显卡选择（CPU/T4/L4/G4/A100/H100）时必须激活此技能。
+description: Google AI Ultra (5x: 1,000 CCU + 20TB / 20x: 2,000 CCU + 30TB Google Drive) 云端算力智能调度与 colab-mcp / colab-dfs-ext 工作站规范。当用户要求连接/使用 Google Colab、零浏览器静默挂载 Google Drive (`colab dfs mount`)、跑 AI 视频模型（MiniMax-H3/Wan2.1/Hunyuan/LTX/ComfyUI）、跑基础大语言模型 LLM（7B/14B/32B/70B 推理或微调）、下载模型权重到 Google Drive 或咨询 Colab 显卡选择（CPU/T4/L4/G4/A100/H100）时必须激活此技能。
 ---
 
 # Google AI Ultra 云端工作站与智能硬件调度规范 (兼容 5x / 20x 套餐)
@@ -13,7 +13,7 @@ description: Google AI Ultra (5x: 1,000 CCU + 20TB / 20x: 2,000 CCU + 30TB Googl
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`download` / `preprocess`**<br>下载模型、解压数据集、挂载云盘 | **`CPU`** | Host CPU | **0 CCU/h** | ♾️ 无限 | **严禁开着高价 GPU (G4/A100/H100) 从 HuggingFace 首次下载几十 GB 模型**。若检测到当前 `ccu_per_hour >= 5.0` 且模型尚未存在于 20TB/30TB 云盘，Agent 必须先拦截并提示用户切回 CPU 下载。 |
 | **`light_video`**<br>Wan2.1-1.3B、LTX-Video、Flux、代码调试 | **`L4 GPU`** | 22.5 GB GDDR6<br>Ada (`sm_89`) | **1.71 CCU/h** | • **5x**: ~584 小时<br>• **20x**: ~1,169 小时 | 支持原生 FP8；显存 < 24GB，建议开启 `enable_model_cpu_offload()`。 |
-| **`heavy_video`（主力王炸）**<br>Wan2.1-14B、HunyuanVideo、1080p 长视频渲染 | **`G4 GPU`**<br>*(无需勾高 RAM)* | **96 GB GDDR7**<br>RTX PRO 6000 Blackwell (`sm_120`) | **6.7 ~ 8.71 CCU/h** | • **5x**: ~115 ~ 149 小时<br>• **20x**: ~230 ~ 298 小时 | **完全替代 A100 与 H100**！拥有 1 PFLOPS BF16 / 2 PFLOPS FP8 / 4 PFLOPS FP4 算力，且显存高达 96GB。<br>**必须关闭 `cpu_offload`**（100% 常驻 96G 显存），使用 `bfloat16` 或原生 `fp8_e4m3fn` + `sdpa`。 |
+| **`heavy_video`（主力王炸）**<br>**MiniMax-H3 (33B + 32B 破限编码器)**、Wan2.1-14B、HunyuanVideo | **`G4 GPU`**<br>*(无需勾高 RAM)* | **96 GB GDDR7**<br>RTX PRO 6000 Blackwell (`sm_120`) | **6.7 ~ 8.71 CCU/h** | • **5x**: ~115 ~ 149 小时<br>• **20x**: ~230 ~ 298 小时 | **完全替代 A100 与 H100**！拥有 1 PFLOPS BF16 / 2 PFLOPS FP8 / 4 PFLOPS FP4 算力，且显存高达 96GB。<br>**必须关闭 `cpu_offload`**（33B DiT + 32B Qwen3-VL 100% 常驻 96G 显存），使用原生 `fp8_e4m3fn` / `NVFP4` + `SageAttention`。 |
 
 ## 2. 基础大语言模型 (LLM) 全尺寸选卡矩阵（推理 & 微调）
 
@@ -118,6 +118,10 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
      ```
 
 5. **全自动跨档位「零浪费」流水线闭环（Zero-Burn Pipeline）**：
-   - 当用户要求运行尚未缓存至云盘的大模型（如 Wan2.1-14B / 32B / 70B）时，Agent 可全自动串联：
+   - 当用户要求运行尚未缓存至云盘的大模型（如 MiniMax-H3 / Wan2.1-14B / 32B / 70B）时，Agent 可全自动串联：
      1. `colab new -s dl`（0 CCU/h 免费 CPU 开机）$\rightarrow$ `colab dfs mount -s dl` $\rightarrow$ 高速下载模型至 20TB/30TB 云盘 $\rightarrow$ `colab stop -s dl`（销毁 CPU 实例）；
      2. `colab new -s gpu --gpu G4`（启动 96GB Blackwell G4）$\rightarrow$ `colab dfs mount -s gpu` $\rightarrow$ 零网络流量从云盘加载权重完成推理/微调，结果写回云盘 $\rightarrow$ `colab stop -s gpu`（跑完立即销毁 G4 实例停止扣费）$\rightarrow$ `colab usage` 汇报 CCU 余额。
+
+## 5. 专项高阶实战参考文档 (`references/`)
+
+- **[`references/minimax_h3_uncensored_comfyui_guide.md`](references/minimax_h3_uncensored_comfyui_guide.md)**：当用户咨询或要求部署 **`MiniMax-H3`（海螺 3 开源 33B 音视频原生同出模型）**、**NSFW 无审核破限编码器 (`Qwen3-VL-32B-Ultra-Heretic`)**、**`MiniMax-H3-Turbo` (4/6/8步加速 LoRA)**、ComfyUI 积木式架构、人物一致性锁脸（`ref2va` / `Flux 首帧 + fl2va`）或 2K 视频超分放大时，请优先阅读此参考指南。

@@ -11,6 +11,8 @@
 ```text
 colab-ultra-workstation/
 ├── SKILL.md                                           # Agent 智能硬件调度与防烧钱拦截技能定义
+├── references/
+│   └── minimax_h3_uncensored_comfyui_guide.md         # MiniMax-H3 无审核破限版 + Turbo 加速 + ComfyUI 高阶实战指南
 ├── scripts/
 │   └── mcp_dfs_mount.py                               # colab-mcp 零浏览器挂载载荷一键生成器（含凭证擦除）
 ├── templates/

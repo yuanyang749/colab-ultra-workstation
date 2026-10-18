@@ -1,0 +1,128 @@
+# 🎬 MiniMax-H3 (海螺 3) 无审核破限版 + Turbo 极速工作流实战指南
+
+> **适用环境**：Google AI Ultra（5x: 1,000 CCU + 20TB 云盘 / 20x: 2,000 CCU + 30TB 云盘）+ `colab-ultra-workstation` 技能
+> **最佳硬件组合**：**0 CCU/h 免费 CPU**（首次下载 50~65GB 全套权重与部署 ComfyUI） + **G4 GPU（96GB RTX PRO 6000 Blackwell, 8.71 CCU/h）**（33B DiT + 32B 破限编码器 100% 显存常驻，原生 FP8/NVFP4 加速）
+
+---
+
+## 1. 模块化“搭积木”三层架构（一次打底，永久复用）
+
+跑出图与视频（尤其是 `MiniMax-H3` 这类 33B 全模态音视频原生同出模型），**只需将底层基础环境一次性持久化安装进 20TB/30TB Google Drive 云盘**；后续所有人物优化、画质超分、镜头控制与特定风格/动作，**100% 依靠挂载 LoRA 或轻量化插件节点解决，无需重装大模型**。
+
+| 层级 | 模块组成 | 存放路径 (`AI_Workstation/ComfyUI/`) | 维护频率与计费策略 |
+| :--- | :--- | :--- | :--- |
+| **第 1 层：不动产底座**<br>*(约 50~65 GB)* | • **ComfyUI 本体**（原生支持 H3 节点）<br>• **`MiniMax-H3` 33B 主模型 + 音视频双 VAE**<br>• **`Qwen3-VL-32B-Ultra-Heretic` 无审核破限编码器** | • `/content/drive/MyDrive/AI_Workstation/ComfyUI`<br>• `models/diffusion_models/`<br>• `models/text_encoders/`<br>• `models/vae/` | **仅需装 1 次**（使用 **0 CCU/h 免费 CPU** 下载至云盘，永久保存，零算力消耗） |
+| **第 2 层：涡轮加速与风格 LoRA**<br>*(几百 MB ~ 几 GB)* | • **`MiniMax-H3-Turbo` (4/6/8 步蒸馏加速 LoRA)**<br>• Civitai / HuggingFace 人物、画风、特定动作 NSFW LoRA | • `models/loras/` | **即插即用**，随时下载单个 `.safetensors` 丢入 `loras/` 目录即可在工作流中串联 |
+| **第 3 层：画质与控制插件**<br>*(几 MB 代码仓库)* | • 多参考锁脸 (`ComfyUI-MiniMaxH3Mod`)<br>• 长视频无限续接 (`ComfyUI_MiniMax_H3_Extender`)<br>• 二阶段 2K 超分 (`SeedVR2` / `Real-ESRGAN`)<br>• 色调对齐与工具集 (`ComfyUI-KJNodes` / `VideoHelperSuite`) | • `custom_nodes/` | **即插即用**，`git clone` 至云盘 `custom_nodes/` 目录即可永久生效 |
+
+---
+
+## 2. 核心底座选型与 HuggingFace 仓库清单
+
+### 2.1 扩散主干模型（`fl2va` vs `ref2va` vs `Hybrid` 融合版）
+
+MiniMax-H3 是 **33B 参数的全模态音视频联合扩散模型（Joint Audio-Video DiT）**，在生成 4~15 秒高清视频的同时，**原生同步生成立体声音轨（人声台词、喘息、环境音效、拟音、配乐）**。
+
+| 主模型分支 | 核心特点 | 适用场景 | 推荐仓库 |
+| :--- | :--- | :--- | :--- |
+| **`fl2va` (`fl2va_pruned`)**<br>*首尾帧/图生音视频版* | **原生画质锐度、皮肤质感、动作流畅度与立体声音质最高**；支持文生音视频 (T2V) 及单图/首尾双图生成音视频 (I2V)。 | **主力推荐**：配合 Flux 高清首帧做写真级人物/NSFW 视频。 | [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3)<br>(`MiniMaxAI/MiniMax-H3`) |
+| **`ref2va` (`ref2va_pruned`)**<br>*万物多参考锁定版* | 支持同时输入多张角色参考图（不同角度）、参考视频片段与参考音频，**免训练 LoRA 直接锁死人物长相与声线**；但纯画质锐度略逊于 `fl2va`。 | 多镜头连续剧、固定角色/固定声线复现。 | [`Comfy-Org/MiniMax-H3`](https://huggingface.co/Comfy-Org/MiniMax-H3) |
+| **`fl2va + ref2va Hybrid`**<br>*社区神级融合版* | 将 `fl2va` 与 `ref2va` 进行权重融合，**兼顾 `fl2va` 的高画质锐度与 `ref2va` 的多图人物锁定能力**。 | 既想要多图锁脸又追求极致画面锐度的高阶玩家。 | [`smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models`](https://huggingface.co/smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models) |
+
+---
+
+### 2.2 NSFW 无审核破限核心：`Qwen3-VL-32B-Ultra-Heretic` 编码器替换法
+
+- **为什么原版会有审查？**
+  `MiniMax-H3` 使用了一颗高达 32B 参数的 **`Qwen3-VL-32B`** 多模态视觉语言模型作为提示词改写与视觉条件编码器（Text/Vision Conditioning Encoder），官方原版编码器内置了严格的安全对齐过滤。
+- **如何彻底解除审查（Uncensored / Abliterated）？**
+  无需修改 33B 视频扩散主干，只需将 `ComfyUI/models/text_encoders/` 下的官方编码器替换为社区去审查破限版 **`Qwen3-VL-32B-Ultra-Heretic`**，并在 ComfyUI 的 `CLIPLoader` 节点中选择该文件（`type` 设为 `minimax`），即可彻底解除文本提示词与输入垫图的安全过滤！
+
+| 破限编码器版本 | 精度与体积 | 硬件适配与特点 | HuggingFace 仓库地址 |
+| :--- | :--- | :--- | :--- |
+| **Ultra-Heretic INT8-ConvRot**<br>*(满血无损破限版)* | INT8 (~33 GB) | 0~49 层全破限条件编码 + 生成尾层，提示词理解与画面细节还原度最高；在 **G4 (96GB)** 上可与 33B 主模型同时 100% 显存常驻。 | • [`OTMFLY/Qwen3-VL-32B-Ultra-Heretic-MiniMax-H3-ComfyUI-INT8-ConvRot`](https://huggingface.co/OTMFLY/Qwen3-VL-32B-Ultra-Heretic-MiniMax-H3-ComfyUI-INT8-ConvRot)<br>• [`ethanfel/Qwen3-VL-32B-Ultra-Heretic-H3-ComfyUI-INT8-ConvRot`](https://huggingface.co/ethanfel/Qwen3-VL-32B-Ultra-Heretic-H3-ComfyUI-INT8-ConvRot) |
+| **Heretic NVFP4**<br>*(Blackwell 原生极速版)* | NVFP4 (~15.7 GB) | 体积缩小一半，且完美触发 Colab **G4 (RTX PRO 6000 Blackwell `sm_120`) 原生 FP4 Tensor Core (4 PFLOPS)** 硬件加速！ | • [`Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4`](https://huggingface.co/Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4) |
+
+---
+
+## 3. `MiniMax-H3-Turbo` 步数蒸馏加速版详解（提速 5 倍 / 省 75% CCU）
+
+`MiniMax-H3-Turbo` 是针对 H3 主干蒸馏出的**加速 LoRA 插件**（存放在 `ComfyUI/models/loras/`），可与上面的 **Ultra-Heretic 无审核破限编码器 100% 同时叠加使用**。
+
+### 3.1 原版 vs Turbo 步数与耗时对比（以 G4 96GB 显卡为例）
+
+| 模式 | 采样步数 (Steps) | 调度器 (Scheduler) | 单条耗时 | 画质与适用场景 |
+| :--- | :--- | :--- | :--- | :--- |
+| **标准原版 (无 Turbo)** | 25 ~ 50 步 | `normal` / `simple` | ~3 ~ 5 分钟 | 耗时较长，消耗 CCU 较多 |
+| **Turbo 4-Step** | **4 步** | `simple` | **~20 ~ 25 秒** | 极致快速，适合快速抽卡测试构图与分镜；大幅度高速动作偶有轻微残影 |
+| **Turbo 6~8 Step（🏆 黄金推荐）** | **6 ~ 8 步** | `simple` | **~35 ~ 50 秒** | **速度与画质完美平衡**！彻底消除低步数塑料感与动作拖影，人物皮肤纹理、五官细节与立体声音质逼近原版 30 步，且省下 75%+ 算力费 |
+
+### 3.2 推荐 Turbo LoRA 仓库与避坑铁律
+- **推荐仓库**：
+  - [`lightx2v/Minimax-h3-Turbo`](https://huggingface.co/lightx2v/Minimax-h3-Turbo)（如 `minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors`、`minimax_h3_ref2v_turbo_4step...`）
+  - `Wuli-art / Larryvrh` 社区优化版（如 `v4_step600_ema` 4/6/8 步系列）
+- **🚨 避坑铁律**：
+  1. **分支必须严格对齐**：跑 `fl2va` 主模型必须挂 `fl2v_turbo` LoRA；跑 `ref2va` 主模型必须挂 `ref2v_turbo` LoRA，混挂会导致画面模糊崩坏！
+  2. **Turbo 模式下严禁开启 `Spectrum` 预测缓存节点**：`Spectrum` 依赖多步迭代建立缓存，在 4~8 步 Turbo 下开启反而会导致画面涂抹变糊；**Turbo 模式只需开启 `SageAttention`（或 `Sol Attention`）即可**。
+
+---
+
+## 4. 社区大佬 4 大高阶优化玩法（人物质感 & 2K 蓝光清晰度）
+
+### 玩法 1：首帧决定上限（Flux.1-dev 无审核出首帧 $\rightarrow$ `MiniMax-H3 fl2va` 图生音视频）
+- **痛点**：任何视频模型直接用文字抽卡（T2V），人物五官精致度、皮肤毛孔质感和特定姿势控制都远不如顶级图像模型。
+- **大佬标准管线**：
+  1. 先用 **Flux.1-dev（挂载写实人像 / NSFW LoRA）** 生成一张构图、光影、人物颜值与皮肤质感满分的 **高清首帧图**（如有需要再生成一张目标动作的 **尾帧图**）；
+  2. 将首帧（或首尾帧）输入 `MiniMax-H3 (fl2va)` + `Ultra-Heretic 破限编码器` + `8-Step Turbo LoRA`，并在提示词中明確描述运镜方式、动作细节以及**人物台词/环境声音**；
+  3. 生成出来的视频从第 1 帧起就是顶级写真画质，且自带同步立体声！
+
+### 玩法 2：多视角零训练锁脸锁声（`ref2va` + `ComfyUI-MiniMaxH3Mod`）
+- **痛点**：想让同一个角色在不同场景、不同机位下连续出镜，但不想费时费力训练人物 LoRA。
+- **解决方案**：安装 `ComfyUI-MiniMaxH3Mod` 节点，切到 `Refmode`，直接塞入 **3~4 张该角色不同角度的清晰参考图 + 1 段参考音轨**。模型原生通过多模态条件把角色的五官、体型甚至说话/呼吸声线牢牢锁死。
+
+### 玩法 3：长视频不断片无限续接 + 消除色偏（`Extender` + `Color Match`）
+- **痛点**：单次生成只有 4~15 秒，直接用尾帧硬接下一段容易出现动作顿挫或越往后颜色越灰/越艳（色偏累积）。
+- **解决方案**：
+  1. 使用 `ComfyUI_MiniMax_H3_Extender` 节点，将上一段视频末尾的潜空间（Latent）与运动上下文直接传入下一段采样器（设置 `denoise ≈ 0.8` 锚定人物与动态连贯性）；
+  2. 在解码输出后串联 `ComfyUI-KJNodes` 中的 **`Color Match`（色彩匹配）** 节点，强制将后续片段的色调分布对齐至首帧原图，实现几十秒长视频零色偏无缝衔接。
+
+### 玩法 4：二阶段 2K 蓝光超分放大（先 768p 极速出片 $\rightarrow$ `SeedVR2` / `4x-UltraSharp` 放大）
+- **痛点**：直接在 2K 分辨率下硬跑 33B 视频扩散模型既慢又极其消耗算力。
+- **解决方案**：
+  1. **第一阶段（保动作与声音）**：在标准分辨率（如 768p / 0.5~0.8 MP）下配合 **8-Step Turbo LoRA**，花 40 秒快速生成动作流畅、声画同步的视频；
+  2. **第二阶段（保 2K 毛孔级画质）**：在工作流末尾接上视频超分节点（如 **`SeedVR2`**、**`LTX Video Upscaler`** 或 **`UpscaleWithModel (4x-UltraSharp / Real-ESRGAN)`**），几十秒内直接将画面超分至 **2K（2432 × 1344）**，彻底洗掉涂抹感，发丝与皮肤纹理清晰可见。
+
+---
+
+## 5. Google AI Ultra 零浪费全自动部署与运行 SOP
+
+利用 `colab-ultra-workstation` 的跨档位流水线，按以下两步实现 **0 CCU 部署、满血 G4 渲染**：
+
+### 第一步：0 CCU/h 免费 CPU 全自动落盘（仅首次执行一次）
+```bash
+# 1. 启动免费 CPU 实例并零浏览器挂载 20TB/30TB 云盘
+colab new -s h3-setup
+colab dfs mount -s h3-setup
+
+# 2. 在云盘 /content/drive/MyDrive/AI_Workstation/ComfyUI 中安装 ComfyUI 本体、常用插件，
+#    并拉取 Comfy-Org/MiniMax-H3 + Qwen3-VL-32B-Ultra-Heretic + MiniMax-H3-Turbo 8-Step LoRA
+#    （全程 0 CCU/h，不消耗任何算力配额）
+
+# 3. 下载完成后立即销毁 CPU 实例
+colab stop -s h3-setup
+```
+
+### 第二步：G4 (96GB Blackwell) 满血显存常驻渲染（随用随开，跑完即焚）
+```bash
+# 1. 启动 96GB 显存的 G4 Blackwell 实例（8.71 CCU/h）并静默挂载云盘
+colab new -s h3-work --gpu G4
+colab dfs mount -s h3-work
+
+# 2. 启动云盘内的 ComfyUI（开启 --highvram 与 SageAttention，33B 主模型 + 32B 破限编码器 100% 常驻 96GB 显存）
+#    • 方式 A（网页交互）：通过 cloudflared 映射 HTTPS 链接在本地浏览器拖拽调参；
+#    • 方式 B（Agent 托管）：由 Agent 直接向 127.0.0.1:8188/prompt 提交工作流 JSON，生成完毕自动下载 .mp4 至本地。
+
+# 3. 渲染结束立即销毁 G4 实例停止计费，并核验 CCU 余额
+colab stop -s h3-work
+colab usage
+```
