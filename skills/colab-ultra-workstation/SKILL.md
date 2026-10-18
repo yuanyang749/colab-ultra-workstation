@@ -129,10 +129,13 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
        ' && https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 ~/.local/bin/colab usage
        ```
 
-5. **全自动跨档位「零浪费」流水线闭环（Zero-Burn Pipeline）**：
+5. **全自动跨档位「零浪费」流水线闭环（Zero-Burn Pipeline & 严禁 G4 空转）**：
+   - **🚨 严禁开着 G4 备料或裸跑 FUSE `mmap` 慢加载（防浪费铁律）**：
+     - **铁律 A（备料在本地 `0 CCU`，点火即连发）**：严禁先开着 G4 (`8.71 CCU/h`) 再去现场想剧本、生成首帧底图或调试工作流。所有耗时的人工选图、`1344×768` 哑光首帧图生成与提示词编排必须在 **G4 点火前（0 CCU）** 全部在本地备齐。
+     - **铁律 B（绕过 FUSE `mmap` 38 分钟慢读陷阱）**：ComfyUI 默认用 `mmap`（4KB 随机分页）读取 Google Drive FUSE 挂载盘速度仅 ~25 MB/s（加载 60GB 模型需 ~38 分钟，白烧 ~5.5 CCU）。在 G4 上必须使用 `scripts/launch_g4_comfyui_fast.py` 进行 **4 线程 16MB 大块顺序预热（250~400 MB/s）+ `--disable-mmap --highvram`**，将冷启动压缩至 **~2.5 分钟** 并将 62GB 权重永久锁入 96GB 显存（第 2 条起 0 秒读盘）。
    - 当用户要求运行尚未缓存至云盘的大模型（如 MiniMax-H3 / Wan2.1-14B / 32B / 70B）时，Agent 可全自动串联：
-     1. `colab new -s dl`（0 CCU/h 免费 CPU 开机）$\rightarrow$ `colab dfs mount -s dl` $\rightarrow$ 高速下载模型至 20TB/30TB 云盘并核验云端落盘 $\rightarrow$ `colab stop -s dl`（销毁 CPU 实例）；
-     2. `colab new -s gpu --gpu G4`（启动 96GB Blackwell G4）$\rightarrow$ `colab dfs mount -s gpu` $\rightarrow$ 零网络流量从云盘加载权重完成推理/微调，结果写回云盘 $\rightarrow$ `colab stop -s gpu`（跑完立即销毁 G4 实例停止扣费）$\rightarrow$ `colab usage` 汇报 CCU 余额。
+     1. `colab new -s dl`（0 CCU/h 免费 CPU 开机）$\rightarrow$ `colab dfs mount -s dl` $\rightarrow$ 高速下载模型至 20TB/30TB 云盘并通过 Drive v3 API 核验云端 100% 落盘 $\rightarrow$ `colab stop -s dl`（销毁 CPU 实例）；
+     2. 本地（`0 CCU`）备齐所有首帧底图与提示词队列 $\rightarrow$ `colab new -s gpu --gpu G4`（启动 96GB Blackwell G4）$\rightarrow$ `colab dfs mount -s gpu` $\rightarrow$ `colab run scripts/launch_g4_comfyui_fast.py -s gpu`（3 分钟极速预热常驻显存）$\rightarrow$ 批量连发完成渲染 $\rightarrow$ 全量强杀销毁 G4 实例停止扣费 $\rightarrow$ `colab usage` 汇报 CCU 余额。
 
 ## 5. 专项高阶实战参考文档 (`references/`)
 
