@@ -89,8 +89,55 @@ MiniMax-H3 是 **33B 参数的全模态音视频联合扩散模型（Joint Audio
 ### 玩法 4：二阶段 2K 蓝光超分放大（先 768p 极速出片 $\rightarrow$ `SeedVR2` / `4x-UltraSharp` 放大）
 - **痛点**：直接在 2K 分辨率下硬跑 33B 视频扩散模型既慢又极其消耗算力。
 - **解决方案**：
-  1. **第一阶段（保动作与声音）**：在标准分辨率（如 768p / 0.5~0.8 MP）下配合 **8-Step Turbo LoRA**，花 40 秒快速生成动作流畅、声画同步的视频；
+  1. **第一阶段（保动作与声音）**：在标准分辨率（`1344 × 768` 768p）下配合 **Turbo LoRA** 快速生成动作流畅、声画同步的视频；
   2. **第二阶段（保 2K 毛孔级画质）**：在工作流末尾接上视频超分节点（如 **`SeedVR2`**、**`LTX Video Upscaler`** 或 **`UpscaleWithModel (4x-UltraSharp / Real-ESRGAN)`**），几十秒内直接将画面超分至 **2K（2432 × 1344）**，彻底洗掉涂抹感，发丝与皮肤纹理清晰可见。
+
+### 玩法 5：🚨 彻底消除“AI 油腻感 / 塑料蜡像高光”的黄金四法则（实测必看！）
+如果直接拿 `minimax_h3_fl2va` 裸跑低分辨率纯文生视频（T2V），人物额头、苹果肌、鼻梁和肩膀极易出现**像抹了凡士林/猪油一样的过曝塑料高光与十级磨皮感**。实测必须同时执行以下 **4 条去油铁律**，画质将发生质的飞跃：
+
+1. **铁律 1：严禁裸跑 T2V！必须使用「单反级哑光高清首帧 (`first_frame`)」驱动 `fl2va` 的 I2V 模式**
+   - `fl2va` 本质是首尾帧图生音视频模型。先用图像模型生成一张 **Sony A7R5 / 哈苏 85mm f/1.4、Kodak Portra 400 胶片感、真实细腻毛孔与柔和哑光肤质（Matte Skin, Zero Oily Shine）的 `1344 × 768` 首帧图**，通过 `LoadImage` 喂给 `MiniMaxH3ImageToVideo.first_frame`，从第 1 帧锁死真实毛孔与自然小痣纹理。
+2. **铁律 2：必须跑满原生 `1344 × 768`（103 万像素 768p）画布**
+   - 低分辨率（如 `864 × 480` 仅 41 万像素）会把面部高频毛孔细节全部压缩糊成油光色块；切回官方原生 `1344 × 768` 后，发丝、睫毛与皮肤纹理瞬间清晰。
+3. **铁律 3：串联 `MiniMaxH3SigmaShift (12.0 / 3.0)` + 将 Turbo LoRA 权重降至 `0.85`（跑 `10` 步）**
+   - `8-Step Turbo LoRA` 在权重 `1.0` 满格且无 SigmaShift 时会强行拉爆局部对比度与高光（蒸馏过曝）。将 `strength_model` 设为 **`0.85`**、采样步数设为 **`10` 步**，并在模型后串联 **`MiniMaxH3SigmaShift (shift_video=12.0, shift_audio=3.0)`**，高光过曝立刻消失，光影过渡如丝般顺滑。
+4. **铁律 4：提示词严禁出现“发光/水光雷区词”**
+   - ❌ **绝对禁用词**：`glowing skin`、`dewy skin`、`porcelain shiny skin`、`glistening skin`（视频模型会直接翻译成满脸抹油）。
+   - ✅ **标准去油词**：`Realistic raw 85mm DSLR photography, Sony A7R5, Kodak Portra 400 film look, natural soft matte skin texture with fine pores, soft diffused warm ambient light, zero oily shine, no harsh specular highlights on face`。
+
+#### 附：实测满血去油 768p I2V 声画同出 ComfyUI API 标准工作流 (`prompt` JSON)
+```json
+{
+  "127": {"class_type": "UNETLoader", "inputs": {"unet_name": "minimax_h3_fl2va_pruned_fp8_scaled.safetensors", "weight_dtype": "default"}},
+  "134": {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["127", 0], "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors", "strength_model": 0.85}},
+  "135": {"class_type": "MiniMaxH3SigmaShift", "inputs": {"model": ["134", 0], "shift_video": 12.0, "shift_audio": 3.0}},
+  "128": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors", "type": "minimax", "device": "default"}},
+  "119": {"class_type": "VAELoader", "inputs": {"vae_name": "minimax_h3_video_vae_fp16.safetensors"}},
+  "120": {"class_type": "VAELoader", "inputs": {"vae_name": "minimax_h3_audio_vae_fp32.safetensors"}},
+  "110": {"class_type": "LoadImage", "inputs": {"image": "first_frame_1344x768.png"}},
+  "131": {
+    "class_type": "MiniMaxH3ImageToVideo",
+    "inputs": {
+      "clip": ["128", 0],
+      "vae": ["119", 0],
+      "first_frame": ["110", 0],
+      "prompt": "Realistic raw 85mm DSLR photography, Sony A7R5, Kodak Portra 400 film look, natural soft matte skin texture with fine pores, soft diffused warm ambient light, zero oily shine, no harsh specular highlights on face...",
+      "width": 1344,
+      "height": 768,
+      "length": 124
+    }
+  },
+  "126": {"class_type": "BasicGuider", "inputs": {"model": ["135", 0], "conditioning": ["131", 0]}},
+  "123": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "res_multistep"}},
+  "124": {"class_type": "BasicScheduler", "inputs": {"model": ["135", 0], "scheduler": "simple", "steps": 10, "denoise": 1.0}},
+  "129": {"class_type": "RandomNoise", "inputs": {"noise_seed": 20269902}},
+  "125": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["129", 0], "guider": ["126", 0], "sampler": ["123", 0], "sigmas": ["124", 0], "latent_image": ["131", 1]}},
+  "122": {"class_type": "VAEDecode", "inputs": {"samples": ["125", 0], "vae": ["119", 0]}},
+  "121": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["125", 0], "vae": ["120", 0]}},
+  "130": {"class_type": "CreateVideo", "inputs": {"images": ["122", 0], "audio": ["121", 0], "fps": 24.0}},
+  "92": {"class_type": "SaveVideo", "inputs": {"video": ["130", 0], "filename_prefix": "video/MiniMax_H3_Pro_768p", "format": "mp4", "codec": "h264"}}
+}
+```
 
 ---
 
