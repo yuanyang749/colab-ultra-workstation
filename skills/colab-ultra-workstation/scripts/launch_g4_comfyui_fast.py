@@ -32,11 +32,13 @@ DRIVE_COMFY = Path("/content/drive/MyDrive/AI_Workstation/ComfyUI")
 LOCAL_COMFY = Path("/content/ComfyUI")
 FAST_MODELS = Path("/content/fast_models")
 
-# Channel A: 7.30 GB pulled via Google Drive v3 API (~45s)
+# Channel A: ~7.50 GB pulled via Google Drive v3 API (~45s)
 DRIVE_CHANNEL_MODELS = [
     ("vae", "minimax_h3_video_vae_fp16.safetensors"),
     ("vae", "minimax_h3_audio_vae_fp32.safetensors"),
     ("loras", "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"),
+    ("loras", "h3-realism-people-t2v-i2v-r2v.safetensors"),
+    ("loras", "minimax-h3-facial-realism-closeup-cp2000.safetensors"),
     ("upscale_models", "4x-UltraSharp.pth"),
 ]
 

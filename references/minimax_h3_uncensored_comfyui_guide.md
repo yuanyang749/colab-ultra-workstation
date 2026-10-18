@@ -92,20 +92,25 @@ MiniMax-H3 是 **33B 参数的全模态音视频联合扩散模型（Joint Audio
   1. **第一阶段（保动作与声音）**：在标准分辨率（`1344 × 768` 768p）下配合 **Turbo LoRA** 快速生成动作流畅、声画同步的视频；
   2. **第二阶段（保 2K 毛孔级画质）**：在工作流末尾接上视频超分节点（如 **`SeedVR2`**、**`LTX Video Upscaler`** 或 **`UpscaleWithModel (4x-UltraSharp / Real-ESRGAN)`**），几十秒内直接将画面超分至 **2K（2432 × 1344）**，彻底洗掉涂抹感，发丝与皮肤纹理清晰可见。
 
-### 玩法 5：🚨 彻底消除“AI 油腻感 / 塑料蜡像高光”的黄金四法则（实测必看！）
-如果直接拿 `minimax_h3_fl2va` 裸跑低分辨率纯文生视频（T2V），人物额头、苹果肌、鼻梁和肩膀极易出现**像抹了凡士林/猪油一样的过曝塑料高光与十级磨皮感**。实测必须同时执行以下 **4 条去油铁律**，画质将发生质的飞跃：
+### 玩法 5：🚨 彻底消除“AI 油腻感 / 塑料蜡像高光”的黄金五法则（I2V 首帧法 & 纯 T2V 写实 LoRA 法实测必看！）
+如果直接拿 `minimax_h3_fl2va` 裸跑默认参数的文生视频（T2V），人物额头、苹果肌、鼻梁和锁骨极易出现**像抹了凡士林/猪油一样的过曝塑料高光与磨皮感**。实测执行以下 **5 条去油铁律**（即使不准备首帧图、纯跑 T2V 也能直出真实毛孔与自然小痣）：
 
-1. **铁律 1：严禁裸跑 T2V！必须使用「单反级哑光高清首帧 (`first_frame`)」驱动 `fl2va` 的 I2V 模式**
-   - `fl2va` 本质是首尾帧图生音视频模型。先用图像模型生成一张 **Sony A7R5 / 哈苏 85mm f/1.4、Kodak Portra 400 胶片感、真实细腻毛孔与柔和哑光肤质（Matte Skin, Zero Oily Shine）的 `1344 × 768` 首帧图**，通过 `LoadImage` 喂给 `MiniMaxH3ImageToVideo.first_frame`，从第 1 帧锁死真实毛孔与自然小痣纹理。
-2. **铁律 2：必须跑满原生 `1344 × 768`（103 万像素 768p）画布**
+1. **铁律 1（纯 T2V 免首帧直出神器）：串联两款专用「真人毛孔与胶片肤质 LoRA」**
+   - 当不想提前准备首帧图、直接跑纯文生视频（T2V）时，在 `UNETLoader` 与 `8-Step Turbo LoRA` 之间串联以下两款轻量级写实肤质 LoRA（总计仅 `205 MB`，已内置于 `setup_minimax_h3_comfyui.py` 与 `launch_g4_comfyui_fast.py`）：
+     1. **`fal/MiniMax-H3-Realism-People-LoRA`**（文件名：`h3-realism-people-t2v-i2v-r2v.safetensors`，`131.2 MB`，触发词：`r34l1sm`，推荐权重：`0.75`）：由 fal 团队基于高分辨率真人实拍镜头微调，同时支持 `T2V / I2V / R2V`，专门压制锁骨/额头塑料反光并还原电影级柔和光影过渡（Roll-off）。
+     2. **`prithivMLmods/MiniMax-H3-Facial-Realism-CloseUp`**（文件名：`minimax-h3-facial-realism-closeup-cp2000.safetensors`，`74.6 MB`，触发词：`Facial Realism`，推荐权重：`0.50`）：专门强化近景/特写镜头下的真实面部毛孔、细微绒毛、锁骨自然小痣与微表情肌理。
+   - **ComfyUI 串联顺序**：`UNETLoader (127)` $\rightarrow$ `LoraLoaderModelOnly (132: h3-realism-people, 0.75)` $\rightarrow$ `LoraLoaderModelOnly (133: facial-realism-closeup, 0.50)` $\rightarrow$ `LoraLoaderModelOnly (134: turbo_8step, 0.85)` $\rightarrow$ `MiniMaxH3SigmaShift (135: 12.0, 3.0)`，并在 Prompt 开头加上触发词 **`r34l1sm, Facial Realism,`**。
+2. **铁律 2（I2V 首帧上限法）：需要 100% 锁死特定构图时，使用「单反级哑光高清首帧 (`first_frame`)」驱动 `fl2va` 的 I2V 模式**
+   - 先用图像模型生成一张 **Sony A7R5 / 哈苏 85mm f/1.4、Kodak Portra 400 胶片感、真实细腻毛孔与柔和哑光肤质（Matte Skin, Zero Oily Shine）的 `1344 × 768` 首帧图**，通过 `LoadImage` 喂给 `MiniMaxH3ImageToVideo.first_frame`。
+3. **铁律 3：必须跑满原生 `1344 × 768`（103 万像素 768p）画布**
    - 低分辨率（如 `864 × 480` 仅 41 万像素）会把面部高频毛孔细节全部压缩糊成油光色块；切回官方原生 `1344 × 768` 后，发丝、睫毛与皮肤纹理瞬间清晰。
-3. **铁律 3：串联 `MiniMaxH3SigmaShift (12.0 / 3.0)` + 将 Turbo LoRA 权重降至 `0.85`（跑 `10` 步）**
+4. **铁律 4：串联 `MiniMaxH3SigmaShift (12.0 / 3.0)` + 将 Turbo LoRA 权重降至 `0.85`（跑 `10` 步）**
    - `8-Step Turbo LoRA` 在权重 `1.0` 满格且无 SigmaShift 时会强行拉爆局部对比度与高光（蒸馏过曝）。将 `strength_model` 设为 **`0.85`**、采样步数设为 **`10` 步**，并在模型后串联 **`MiniMaxH3SigmaShift (shift_video=12.0, shift_audio=3.0)`**，高光过曝立刻消失，光影过渡如丝般顺滑。
-4. **铁律 4：提示词严禁出现“发光/水光雷区词”**
+5. **铁律 5：提示词严禁出现“发光/水光雷区词”**
    - ❌ **绝对禁用词**：`glowing skin`、`dewy skin`、`porcelain shiny skin`、`glistening skin`（视频模型会直接翻译成满脸抹油）。
-   - ✅ **标准去油词**：`Realistic raw 85mm DSLR photography, Sony A7R5, Kodak Portra 400 film look, natural soft matte skin texture with fine pores, soft diffused warm ambient light, zero oily shine, no harsh specular highlights on face`。
+   - ✅ **标准去油词**：`r34l1sm, Facial Realism, Realistic raw 85mm DSLR photography, Sony A7R5, Kodak Portra 400 film look, natural soft matte skin texture with fine pores, soft diffused warm ambient light, zero oily shine, no harsh specular highlights on face`。
 
-#### 附：实测满血去油 768p I2V 声画同出 ComfyUI API 标准工作流 (`prompt` JSON)
+#### 附：实测满血去油 768p I2V / T2V 声画同出 ComfyUI API 标准工作流 (`prompt` JSON)
 ```json
 {
   "127": {"class_type": "UNETLoader", "inputs": {"unet_name": "minimax_h3_fl2va_pruned_fp8_scaled.safetensors", "weight_dtype": "default"}},

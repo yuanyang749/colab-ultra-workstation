@@ -82,7 +82,7 @@ DOWNLOAD_MANIFEST = [
         "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
         COMFY_DIR / "models/vae/minimax_h3_video_vae_fp16.safetensors",
     ),
-    # 2. Turbo 步数蒸馏加速 LoRA (8-Step 黄金版 & 4-Step 极速版)
+    # 2. Turbo 步数蒸馏加速 LoRA (8-Step 黄金版 & 4-Step 极速版) + 真人哑光肤质去油光 LoRA
     (
         "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
         COMFY_DIR / "models/loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
@@ -90,6 +90,14 @@ DOWNLOAD_MANIFEST = [
     (
         "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
         COMFY_DIR / "models/loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+    ),
+    (
+        "https://huggingface.co/fal/MiniMax-H3-Realism-People-LoRA/resolve/main/h3-realism-people-t2v-i2v-r2v.safetensors",
+        COMFY_DIR / "models/loras/h3-realism-people-t2v-i2v-r2v.safetensors",
+    ),
+    (
+        "https://huggingface.co/prithivMLmods/MiniMax-H3-Facial-Realism-CloseUp/resolve/main/minimax-h3-facial-realism-closeup-cp2000.safetensors",
+        COMFY_DIR / "models/loras/minimax-h3-facial-realism-closeup-cp2000.safetensors",
     ),
     # 3. 官方运镜与特效 Embeddings (Kiss Camera / Bullet Time 等 10 款)
     (
