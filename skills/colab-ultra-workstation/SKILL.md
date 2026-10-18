@@ -109,17 +109,29 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
    - **只读防误删模式**：当任务仅为读取 20TB/30TB 云盘中的模型权重进行推理、无需写入云盘时，可使用 `colab dfs mount -s <session> --readonly` 防止脚本误删模型库。
    - **FUSE 假死原地自愈**：若云盘出现 I/O 挂起或 `Transport endpoint is not connected` 报错，严禁直接重启 Runtime 导致环境丢失，应优先执行 `colab dfs mount -s <session> --force --purge-state` 原地清理 DriveFS 状态并重挂。
 
-4. **任务完成自动断连与销毁释放（Stop CCU Billing）**：
-   - **CLI 通道主动释放**：任务结束且产物已写入 `/content/drive/MyDrive/AI_Workstation/outputs` 后，Agent 必须执行 `~/.local/bin/colab stop -s <session>` 销毁实例停止计费，并可调用 `~/.local/bin/colab usage` 汇报剩余 CCU。
-   - **`colab-mcp` 网页通道主动释放**：无需用户手动点击网页菜单，Agent 可直接在单元格中执行以下代码立即销毁并释放云端运行时（立停计费）：
-     ```python
-     from google.colab import runtime
-     runtime.unassign()  # 或调用 workstation_init.release_runtime()
-     ```
+4. **任务完成自动断连与销毁释放（Stop CCU Billing & 幽灵实例强杀）**：
+   - **🚨 关机前必做：DriveFS 异步云端落盘核验（防大文件丢失铁律）**：
+     - 往 `/content/drive/MyDrive/...` 移动或写入几十 GB 的大模型/视频文件时，DriveFS 会先写入容器本地缓存（`/root/.config/Google/DriveFS`）再后台异步上传至云端。**若 `shutil.move` 一返回就立即执行 `colab stop`，尚未传完的缓存文件会随容器销毁而永久丢失！**
+     - 销毁实例前必须通过 Google Drive v3 API (`files.list`) 核验目标文件已全部出现在云端且 `size > 0`（参见 `scripts/setup_minimax_h3_comfyui.py` Step 5）。
+   - **CLI 通道主动释放**：调用 `~/.local/bin/colab stop -s <session>` 销毁指定会话。
+   - **`colab-mcp` 网页通道主动释放**：在单元格中执行 `from google.colab import runtime; runtime.unassign()`（或 `workstation_init.release_runtime()`）。
+   - **🚨 终极清场指令（强杀浏览器残留的匿名 `HIGH_RAM` 幽灵实例）**：
+     - 用户在浏览器中手动关闭标签页或仅点击“断开连接”时，Colab 服务端往往会残留一个未命名的后台实例（如 `HIGH_RAM` CPU 持续偷跑 `0.26 CCU/h`），且普通 `colab stop` 因无本地会话名无法直接关闭。
+     - 每次收工后，Agent 必须执行以下全量清场与核验命令，确保 `Active assignments: 0` 且 `Usage rate: 0.00/hr`：
+       ```bash
+       https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" \
+         ~/.local/share/uv/tools/google-colab-cli/bin/python -c '
+       from colab_cli.common import state
+       _, assignments = state.sync_sessions()
+       for a in assignments:
+           print("Unassigning:", a.endpoint, a.accelerator.value, a.machine_shape.name)
+           state.client.unassign(a.endpoint)
+       ' && https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 ~/.local/bin/colab usage
+       ```
 
 5. **全自动跨档位「零浪费」流水线闭环（Zero-Burn Pipeline）**：
    - 当用户要求运行尚未缓存至云盘的大模型（如 MiniMax-H3 / Wan2.1-14B / 32B / 70B）时，Agent 可全自动串联：
-     1. `colab new -s dl`（0 CCU/h 免费 CPU 开机）$\rightarrow$ `colab dfs mount -s dl` $\rightarrow$ 高速下载模型至 20TB/30TB 云盘 $\rightarrow$ `colab stop -s dl`（销毁 CPU 实例）；
+     1. `colab new -s dl`（0 CCU/h 免费 CPU 开机）$\rightarrow$ `colab dfs mount -s dl` $\rightarrow$ 高速下载模型至 20TB/30TB 云盘并核验云端落盘 $\rightarrow$ `colab stop -s dl`（销毁 CPU 实例）；
      2. `colab new -s gpu --gpu G4`（启动 96GB Blackwell G4）$\rightarrow$ `colab dfs mount -s gpu` $\rightarrow$ 零网络流量从云盘加载权重完成推理/微调，结果写回云盘 $\rightarrow$ `colab stop -s gpu`（跑完立即销毁 G4 实例停止扣费）$\rightarrow$ `colab usage` 汇报 CCU 余额。
 
 ## 5. 专项高阶实战参考文档 (`references/`)

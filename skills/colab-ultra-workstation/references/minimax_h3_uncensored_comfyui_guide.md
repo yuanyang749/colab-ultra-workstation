@@ -134,10 +134,14 @@ MiniMax-H3 是 **33B 参数的全模态音视频联合扩散模型（Joint Audio
   "125": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["129", 0], "guider": ["126", 0], "sampler": ["123", 0], "sigmas": ["124", 0], "latent_image": ["131", 1]}},
   "122": {"class_type": "VAEDecode", "inputs": {"samples": ["125", 0], "vae": ["119", 0]}},
   "121": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["125", 0], "vae": ["120", 0]}},
-  "130": {"class_type": "CreateVideo", "inputs": {"images": ["122", 0], "audio": ["121", 0], "fps": 24.0}},
-  "92": {"class_type": "SaveVideo", "inputs": {"video": ["130", 0], "filename_prefix": "video/MiniMax_H3_Pro_768p", "format": "mp4", "codec": "h264"}}
+  "140": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.pth"}},
+  "141": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["140", 0], "image": ["122", 0]}},
+  "142": {"class_type": "ImageScale", "inputs": {"image": ["141", 0], "upscale_method": "lanczos", "width": 2560, "height": 1440, "crop": "disabled"}},
+  "130": {"class_type": "CreateVideo", "inputs": {"images": ["142", 0], "audio": ["121", 0], "fps": 24.0}},
+  "92": {"class_type": "SaveVideo", "inputs": {"video": ["130", 0], "filename_prefix": "video/MiniMax_H3_Pro_2K_1440p", "format": "mp4", "codec": "h264"}}
 }
 ```
+> 💡 **768p 与 2K 灵活切换技巧**：日常抽卡测试时，将 `130 (CreateVideo)` 的 `images` 直接连到 `["122", 0]`（直出 `1344 × 768`，耗时 `~111s`）；挑中满意的种子后，将 `130` 的 `images` 改连到 `["142", 0]`（串联 `140 -> 141 -> 142`），ComfyUI 会 **100% 命中前序节点缓存（0 秒跳过 33B 采样）**，仅用 `~89s` 即可直接输出 **2K QHD (`2560 × 1440`, 10.4 Mbps)** 蓝光成片！
 
 ---
 
@@ -151,11 +155,11 @@ MiniMax-H3 是 **33B 参数的全模态音视频联合扩散模型（Joint Audio
 colab new -s h3-setup
 colab dfs mount -s h3-setup
 
-# 2. 在云盘 /content/drive/MyDrive/AI_Workstation/ComfyUI 中安装 ComfyUI 本体、常用插件，
-#    并拉取 Comfy-Org/MiniMax-H3 + Qwen3-VL-32B-Ultra-Heretic + MiniMax-H3-Turbo 8-Step LoRA
-#    （全程 0 CCU/h，不消耗任何算力配额）
+# 2. 运行一键部署脚本，在云盘 /content/drive/MyDrive/AI_Workstation/ComfyUI 中安装 ComfyUI、插件与 12 个核心权重 (74.90 GB)，
+#    并自动通过 Google Drive v3 API 轮询确认 12/12 文件 100% 异步落盘云端后再关机
+colab run scripts/setup_minimax_h3_comfyui.py -s h3-setup
 
-# 3. 下载完成后立即销毁 CPU 实例
+# 3. 确认云端全部落盘后销毁 CPU 实例
 colab stop -s h3-setup
 ```
 
@@ -165,11 +169,25 @@ colab stop -s h3-setup
 colab new -s h3-work --gpu G4
 colab dfs mount -s h3-work
 
-# 2. 启动云盘内的 ComfyUI（开启 --highvram 与 SageAttention，33B 主模型 + 32B 破限编码器 100% 常驻 96GB 显存）
+# 2. 启动云盘内的 ComfyUI（开启 --highvram --disable-mmap，62GB 权重 100% 常驻 96GB 显存）
 #    • 方式 A（网页交互）：通过 cloudflared 映射 HTTPS 链接在本地浏览器拖拽调参；
-#    • 方式 B（Agent 托管）：由 Agent 直接向 127.0.0.1:8188/prompt 提交工作流 JSON，生成完毕自动下载 .mp4 至本地。
+#    • 方式 B（Agent 托管）：由 Agent 直接向 /prompt 提交工作流 JSON，生成完毕自动下载 .mp4 至本地。
 
-# 3. 渲染结束立即销毁 G4 实例停止计费，并核验 CCU 余额
+# 3. 渲染结束立即销毁所有实例停止计费，并核验 CCU 余额为 0.00/hr
 colab stop -s h3-work
 colab usage
 ```
+
+---
+
+## 6. 🚨 实战踩坑与避坑总表（6 大血泪教训汇总）
+
+| 序号 | 坑点现象 | 根本原因 | 标准解决方案 |
+| :---: | :--- | :--- | :--- |
+| **1** | **首次 `colab dfs consent` 授权后挂载报 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`** | Google OAuth 细粒度授权页面中，「查看、编辑、创建和删除您的所有 Google Drive 文件」复选框**默认未勾选**。 | 授权页面必须手动勾选 Drive 复选框；或直接用 `--scopes "https://www.googleapis.com/auth/drive"` 单权限强制重签。 |
+| **2** | **本地执行 `colab` 或 `dfs_creds` 卡死 / OAuth `127.0.0.1` 回调失败** | 本地终端未走代理无法访问 `googleapis.com`，或开启代理但未排除 `localhost` 导致本地回调被代理劫持。 | 统一加上：`https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1"`。 |
+| **3** | **大模型 `shutil.move` 进 `/content/drive` 后立刻 `colab stop` 导致文件丢失** | DriveFS 采用本地缓存（`/root/.config/Google/DriveFS`）+ 后台异步上传机制，`mv` 返回仅代表写入本地缓存，立即销毁容器会中断后台上传。 | 关机前必须调用 Google Drive v3 API (`files.list`) 确认所有文件已在云端可见且 `size > 100000` 后再执行 `colab stop`。 |
+| **4** | **ComfyUI 首次从云盘加载 40GB+ `.safetensors` 耗时数分钟** | `safetensors` 默认使用 `mmap`（4KB 随机分页），在 FUSE 挂载盘上触发数百万次小块请求，读取速度跌至 ~25 MB/s。 | 启动 ComfyUI 时加上 `--disable-mmap --highvram`（顺序流式读取提升至 300+ MB/s，且加载后 62GB 权重永久常驻 G4 96GB 显存，第 2 条起 0 秒读盘）。 |
+| **5** | **生成的视频人物满脸“猪油高光 / 塑料蜡像感”** | 拿 `fl2va`（首尾帧模型）裸跑低分辨率 `480p` 纯文生视频 (T2V)，且提示词写了 `glowing/dewy skin`、Turbo LoRA 开满 `1.0` 导致对比度过曝。 | 严格执行 **4.5 节去油四法则**：单反级哑光高清首帧 (`first_frame`) + 原生 `1344×768` + `MiniMaxH3SigmaShift (12.0/3.0)` + `Turbo 0.85 (10步)`。 |
+| **6** | **在浏览器手动点“断开连接”后，`colab usage` 仍显示 `Active assignments: 1` (`0.26/hr`)** | 浏览器端普通断开或切换运行时会在服务端残留未命名的 `HIGH_RAM` CPU 幽灵实例（`name="?"`），普通 `colab stop` 因无会话名无法关闭。 | 运行 `SKILL.md` 4.4 节中的 **`state.client.unassign(a.endpoint)` 全量清场指令**，遍历服务端 `assignments` 强杀所有残留实例，确保 `Usage rate: 0.00/hr`。 |
+
