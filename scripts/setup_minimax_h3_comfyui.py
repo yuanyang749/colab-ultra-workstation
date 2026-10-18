@@ -123,10 +123,20 @@ DOWNLOAD_MANIFEST = [
         "https://huggingface.co/OTMFLY/Qwen3-VL-32B-Ultra-Heretic-MiniMax-H3-ComfyUI-INT8-ConvRot/resolve/main/qwen3vl_32b_minimax_h3_generation_tail_50_63_int8_convrot.safetensors",
         COMFY_DIR / "models/text_encoders/qwen3vl_32b_minimax_h3_generation_tail_50_63_int8_convrot.safetensors",
     ),
-    # 7. 主模型: MiniMax-H3 fl2va Pruned FP8 Scaled (19.52 GB, 官方最高画质首尾帧/图生/文生音视频)
+    # 7. 无审核破限编码器 C: Qwen3-VL-30B-A3B-Instruct-heretic (27.09 GB, ComfyUI Subgraph 原生兼容无审核版)
+    (
+        "https://huggingface.co/BennyDaBall/Qwen3-VL-30B-A3B-Instruct-heretic-safetensors/resolve/main/Qwen3-VL-30B-A3B-Instruct-heretic.safetensors",
+        COMFY_DIR / "models/text_encoders/Qwen3-VL-30B-A3B-Instruct-heretic.safetensors",
+    ),
+    # 8. 主模型 A: MiniMax-H3 fl2va Pruned FP8 Scaled (19.52 GB, 轻量高速版)
     (
         "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
         COMFY_DIR / "models/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+    ),
+    # 9. 主模型 B: MiniMax-H3 fl2va Full FP8 E4M3FN (32.97 GB, 官方满血未裁剪最高画质版)
+    (
+        "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_fp8_e4m3fn.safetensors",
+        COMFY_DIR / "models/diffusion_models/minimax_h3_fl2va_fp8_e4m3fn.safetensors",
     ),
 ]
 

@@ -163,15 +163,16 @@ colab run scripts/setup_minimax_h3_comfyui.py -s h3-setup
 colab stop -s h3-setup
 ```
 
-### 第二步：G4 (96GB Blackwell) 满血显存常驻渲染（随用随开，跑完即焚）
+### 第二步：G4 (96GB Blackwell) 3 分钟极速预热与满血显存常驻渲染（随用随开，跑完即焚）
+> 💡 **备料省钱铁律**：点火 G4 之前，先在本地（`0 CCU`）把今天要拍的所有 `1344 × 768` 哑光首帧大图和台词提示词全部备好；点火后运行下方极速预热脚本（约 2.5~3 分钟即可把 60GB+ 核心模型预热并锁入 96GB 显存），随后批量连发渲染！
+
 ```bash
 # 1. 启动 96GB 显存的 G4 Blackwell 实例（8.71 CCU/h）并静默挂载云盘
 colab new -s h3-work --gpu G4
 colab dfs mount -s h3-work
 
-# 2. 启动云盘内的 ComfyUI（开启 --highvram --disable-mmap，62GB 权重 100% 常驻 96GB 显存）
-#    • 方式 A（网页交互）：通过 cloudflared 映射 HTTPS 链接在本地浏览器拖拽调参；
-#    • 方式 B（Agent 托管）：由 Agent 直接向 /prompt 提交工作流 JSON，生成完毕自动下载 .mp4 至本地。
+# 2. 运行 3 分钟极速启动脚本（4 线程 16MB 大块顺序预热 60GB+ 模型 + 启动 ComfyUI --highvram --disable-mmap + Cloudflare 隧道）
+colab run scripts/launch_g4_comfyui_fast.py -s h3-work
 
 # 3. 渲染结束立即销毁所有实例停止计费，并核验 CCU 余额为 0.00/hr
 colab stop -s h3-work
@@ -187,7 +188,7 @@ colab usage
 | **1** | **首次 `colab dfs consent` 授权后挂载报 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`** | Google OAuth 细粒度授权页面中，「查看、编辑、创建和删除您的所有 Google Drive 文件」复选框**默认未勾选**。 | 授权页面必须手动勾选 Drive 复选框；或直接用 `--scopes "https://www.googleapis.com/auth/drive"` 单权限强制重签。 |
 | **2** | **本地执行 `colab` 或 `dfs_creds` 卡死 / OAuth `127.0.0.1` 回调失败** | 本地终端未走代理无法访问 `googleapis.com`，或开启代理但未排除 `localhost` 导致本地回调被代理劫持。 | 统一加上：`https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1"`。 |
 | **3** | **大模型 `shutil.move` 进 `/content/drive` 后立刻 `colab stop` 导致文件丢失** | DriveFS 采用本地缓存（`/root/.config/Google/DriveFS`）+ 后台异步上传机制，`mv` 返回仅代表写入本地缓存，立即销毁容器会中断后台上传。 | 关机前必须调用 Google Drive v3 API (`files.list`) 确认所有文件已在云端可见且 `size > 100000` 后再执行 `colab stop`。 |
-| **4** | **ComfyUI 首次从云盘加载 40GB+ `.safetensors` 耗时数分钟** | `safetensors` 默认使用 `mmap`（4KB 随机分页），在 FUSE 挂载盘上触发数百万次小块请求，读取速度跌至 ~25 MB/s。 | 启动 ComfyUI 时加上 `--disable-mmap --highvram`（顺序流式读取提升至 300+ MB/s，且加载后 62GB 权重永久常驻 G4 96GB 显存，第 2 条起 0 秒读盘）。 |
+| **4** | **ComfyUI 首次从云盘加载 60GB+ `.safetensors` 耗时近 38 分钟** | `safetensors` 默认使用 `mmap`（4KB 随机分页），在 FUSE 挂载盘上触发数百万次小块请求，读取速度跌至 ~25 MB/s。 | 直接使用 `scripts/launch_g4_comfyui_fast.py`（4 线程 16MB 大块顺序预热提升至 250~400 MB/s，并开启 `--disable-mmap --highvram`，3 分钟内将 62GB 权重永久常驻 G4 96GB 显存，第 2 条起 0 秒读盘）。 |
 | **5** | **生成的视频人物满脸“猪油高光 / 塑料蜡像感”** | 拿 `fl2va`（首尾帧模型）裸跑低分辨率 `480p` 纯文生视频 (T2V)，且提示词写了 `glowing/dewy skin`、Turbo LoRA 开满 `1.0` 导致对比度过曝。 | 严格执行 **4.5 节去油四法则**：单反级哑光高清首帧 (`first_frame`) + 原生 `1344×768` + `MiniMaxH3SigmaShift (12.0/3.0)` + `Turbo 0.85 (10步)`。 |
 | **6** | **在浏览器手动点“断开连接”后，`colab usage` 仍显示 `Active assignments: 1` (`0.26/hr`)** | 浏览器端普通断开或切换运行时会在服务端残留未命名的 `HIGH_RAM` CPU 幽灵实例（`name="?"`），普通 `colab stop` 因无会话名无法关闭。 | 运行 `SKILL.md` 4.4 节中的 **`state.client.unassign(a.endpoint)` 全量清场指令**，遍历服务端 `assignments` 强杀所有残留实例，确保 `Usage rate: 0.00/hr`。 |
 
