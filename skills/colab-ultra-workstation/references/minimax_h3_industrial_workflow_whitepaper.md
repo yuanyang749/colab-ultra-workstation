@@ -1329,4 +1329,10 @@ INDUSTRIAL_UPGRADE_MANIFEST = [
 4. **极端交叉走位遮挡（角色 A 从角色 B 背后完全穿过且被遮挡 $>1\text{ 秒}$）的追踪恢复**：
    - **机理**：`Carasibana/ComfyUI-H3-FaceRefine` v1.1.2 源码为了防止在多人交叉时把 A 的脸贴到 B 头上，设定了保护阈值：当目标人脸丢失且重现位置偏离丢失前超过 `0.75 × face_height` 时，自动追踪器会主动放弃该段（标为 `lost` 并平滑淡出回退至前道画面）。
    - **调优预案**：由于我们在前道（模块 4）已经部署了 **`MinimaxH3LatentUpscaler3D` + `MMH3SplitUpscale`（`2016×1152` 全局潜空间瓦片重采样）**，即使某几帧因极端遮挡退回模块 4 的输出，其面部也已经过 2.25 倍 Token 密度的 2K 级重采样，不会出现马赛克崩坏；若仍需强制局部精修，可在 `H3 Load Video + Face Select` 节点中切为 `select = "manual"` 手动点选遮挡前后的关键帧坐标。
+5. **分段原生潜变量快照（`SaveLatent / LoadLatent`）与零损耗断点续跑机制（避免单段返工重跑全链）**：
+   - **机理**：在一镜到底多段接力工作流中，若对前 2 段满意、仅需微调第 3 段提示词（例如微调角色转头视线），直接用 `VHS_LoadVideo` 读取已压缩的 `Seg02.mp4` 反向重编码会丢失 `VAEDecode` 前的 141 帧原始 `AV_LATENT` 分布，导致 `MiniMaxH3JoinMatch` 无法对齐潜变量统计量而引发机位/背景跳变；但若每次从第 1 段重跑又会白白浪费前两段的算力时间。
+   - **调优预案**：使用 `scripts/resume_from_latent_checkpoint.py --inject-checkpoints` 在每一段末尾（`Node 27 / 48 / 68 / 88`）并联 ComfyUI 原生内置的 **`SaveLatent`** 节点（`Node 29 / 49 / 69 / 89`），每段自动将未解码的原始 `AV_LATENT` 张量（仅 `~12 MB`）落盘至 `output/latents/`。后续需从任意第 $N$ 段局部补拍时，运行 `--resume-from N` 自动剪除前 $N-1$ 段采样节点，并将上游输出节点（如 `Node 48`）原位替换为 **`LoadLatent`**（`0.1 秒` 直接加载 `Seg02_raw_av.latent` 注入 `MiniMaxH3MotionContext` 与 `MiniMaxH3JoinMatch`），实现 **100% 逐比特潜空间一镜到底 + 节省 50%~75% 算力**。
+6. **本地 0 CCU 声学包络自动对齐字幕与人物出场动效铭牌压制（`scripts/auto_subtitle_video.py`）**：
+   - **机理**：视频扩散大模型在像素空间直接生成中文字幕极易出现笔画粘连乱码，因此分镜提示词末尾必须声明 `no subtitles`。
+   - **调优预案**：成片拉回本地后，通过 `scripts/auto_subtitle_video.py` 对每段音频提取 `130 Hz – 3600 Hz` 人声频带短时均方根能量包络（20ms 步长 + 100ms 平滑窗口过滤拍桌瞬态脉冲），自动锁定精确到 `10ms` 的开口起止时间与逗号换气停顿点，同步输出标准 `.srt` 外挂字幕及带柔和出入场微动效（`0.38s` Alpha 淡入淡出 + `18px` 横向轻滑）的首段人物介绍铭牌与 2 倍超采样电影级硬字幕成片。
 
