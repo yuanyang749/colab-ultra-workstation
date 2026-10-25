@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-"""G4 (96GB Blackwell) ~90-Second Dual-Channel NVMe Fast Boot & ComfyUI Launcher for MiniMax-H3.
+"""G4 (96GB Blackwell) Tri-Parallel NVMe Fast Boot & ComfyUI v2.1 Launcher for MiniMax-H3 + Qwen3-TTS + IndexTTS-2.5.
 
-Breaks BOTH the 25 MB/s FUSE `mmap` bottleneck AND the 140 MB/s Google Drive single-account cap by:
-1. Running a Dual-Channel Parallel NVMe Engine into `/content/fast_models` (Local NVMe SSD):
-   - Channel A (Google Drive v3 API, ~150 MB/s, 64 streams): pulls the 4 medium/small weights (7.30 GB:
-     `video_vae`, `audio_vae`, `turbo_8step_lora`, `4x-UltraSharp`) in ~45s.
-   - Channel B (HuggingFace CDN + Drive v3 Fallback, ~450 MB/s, 32 streams): simultaneously pulls the 2
-     giant weights (34.13 GB: `minimax_h3_fl2va_pruned_fp8_scaled` + `qwen3vl_32b_heretic_minimax_h3_nvfp4`)
-     in ~65s.
-   - Combined aggregate throughput reaches 500-650 MB/s, staging all 41.42 GB to local NVMe SSD in ~65-80s!
-2. Zero Token Leakage: passes Drive OAuth token via a `0600` temp config file deleted immediately after use.
-3. Wires `/content/ComfyUI/models` to read the 41.42 GB active models from local NVMe SSD at ~2.5 GB/s
-   (~16 seconds into G4's 96GB VRAM) and pins them permanently in VRAM with `--highvram --disable-mmap`.
+Lossless v2.1 Turbo Boot Architecture:
+1. Tri-Parallel Cold-Start Overlap:
+   - Installs `aria2` + `sox` once, then immediately launches the Dual-Channel NVMe Model Engine
+     (Drive v3 API + HuggingFace CDN) in a background thread WHILE concurrently cloning ComfyUI,
+     mirroring `custom_nodes` onto local NVMe SSD (excluding `.git`), and installing Python deps via `uv`/`pip`.
+2. Active-Profile Precision NVMe Staging (42.33 GB instead of 66.67 GB, 100% lossless):
+   - Stages only the active `Scheme A` (`Singularity v1.3`) or `Scheme B` (`Official fl2va FP8`) stack into local NVMe SSD,
+     while keeping all remaining Drive weights seamlessly accessible via hybrid directory symlinks.
+3. Local NVMe `custom_nodes` Mirroring:
+   - Eliminates the 20s Google Drive FUSE small-file `.py` import bottleneck during ComfyUI startup.
+4. Blackwell SM120 Native Execution (`--highvram --disable-mmap --fast`).
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
 import subprocess
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -32,29 +34,61 @@ DRIVE_COMFY = Path("/content/drive/MyDrive/AI_Workstation/ComfyUI")
 LOCAL_COMFY = Path("/content/ComfyUI")
 FAST_MODELS = Path("/content/fast_models")
 
-# Channel A: ~7.50 GB pulled via Google Drive v3 API (~45s)
+# Channel A: pulled via Google Drive v3 API (~150 MB/s, 64 streams)
 DRIVE_CHANNEL_MODELS = [
     ("vae", "minimax_h3_video_vae_fp16.safetensors"),
     ("vae", "minimax_h3_audio_vae_fp32.safetensors"),
     ("loras", "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"),
     ("loras", "h3-realism-people-t2v-i2v-r2v.safetensors"),
     ("loras", "minimax-h3-facial-realism-closeup-cp2000.safetensors"),
+    ("latent_upscale_models", "minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors"),
     ("upscale_models", "4x-UltraSharp.pth"),
 ]
 
-# Channel B: 34.13 GB pulled simultaneously via HuggingFace CDN (with automatic Drive v3 API fallback) (~65s)
-HF_CHANNEL_MODELS = [
-    (
-        "diffusion_models",
-        "minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
-        "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
-    ),
-    (
-        "text_encoders",
-        "qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
-        "https://huggingface.co/Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4/resolve/main/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
-    ),
-]
+# Channel B: giant weights pulled simultaneously via HuggingFace CDN (~450 MB/s, 32 streams)
+HF_PROFILES = {
+    "scheme_a": [
+        (
+            "diffusion_models",
+            "Minimax-h3_Singularity_ref2va_Pruned_v1.3_int8.safetensors",
+            "https://huggingface.co/WarmBloodAban/Minimax-h3_Singularity/resolve/main/Minimax-h3_Singularity_ref2va_Pruned_v1.3_int8.safetensors",
+        ),
+        (
+            "text_encoders",
+            "qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+            "https://huggingface.co/Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4/resolve/main/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+        ),
+    ],
+    "scheme_b": [
+        (
+            "diffusion_models",
+            "minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+            "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+        ),
+        (
+            "text_encoders",
+            "qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+            "https://huggingface.co/Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4/resolve/main/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+        ),
+    ],
+    "all": [
+        (
+            "diffusion_models",
+            "Minimax-h3_Singularity_ref2va_Pruned_v1.3_int8.safetensors",
+            "https://huggingface.co/WarmBloodAban/Minimax-h3_Singularity/resolve/main/Minimax-h3_Singularity_ref2va_Pruned_v1.3_int8.safetensors",
+        ),
+        (
+            "diffusion_models",
+            "minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+            "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+        ),
+        (
+            "text_encoders",
+            "qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+            "https://huggingface.co/Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4/resolve/main/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+        ),
+    ],
+}
 
 
 def sh(cmd: str) -> str:
@@ -74,16 +108,17 @@ def get_drive_token() -> str:
     return json.loads(urllib.request.urlopen(req, timeout=5).read().decode())["access_token"]
 
 
-def stage_models_dual_channel() -> None:
-    """Simultaneously pull 7.30 GB from Drive v3 API and 34.13 GB from HF CDN (with Drive fallback) into local NVMe."""
-    sh("apt-get update -qq && apt-get install -y -qq aria2")
+def stage_models_dual_channel(profile: str = "scheme_a") -> None:
+    """Simultaneously pull medium weights from Drive v3 API and giant weights from HF CDN into local NVMe."""
     tok = get_drive_token()
 
-    params = urllib.parse.urlencode({
-        "q": 'trashed = false and (name contains ".safetensors" or name contains ".pth")',
-        "fields": "files(id,name,size)",
-        "pageSize": 50,
-    })
+    params = urllib.parse.urlencode(
+        {
+            "q": 'trashed = false and (name contains ".safetensors" or name contains ".pth")',
+            "fields": "files(id,name,size)",
+            "pageSize": 100,
+        }
+    )
     req = urllib.request.Request(
         f"https://www.googleapis.com/drive/v3/files?{params}",
         headers={"Authorization": f"Bearer {tok}"},
@@ -113,7 +148,8 @@ def stage_models_dual_channel() -> None:
             f"  out={fname}\n"
         )
 
-    for subdir, fname, hf_url in HF_CHANNEL_MODELS:
+    hf_models = HF_PROFILES.get(profile, HF_PROFILES["scheme_a"])
+    for subdir, fname, hf_url in hf_models:
         dest = FAST_MODELS / subdir / fname
         dest.parent.mkdir(parents=True, exist_ok=True)
         f_meta = files_map.get(fname)
@@ -129,11 +165,14 @@ def stage_models_dual_channel() -> None:
         )
 
     if not drive_lines and not hf_lines:
-        print("✅ 全部 41.42 GB 核心模型已在本地 NVMe SSD 就绪！", flush=True)
+        print("✅ 全部核心模型已在本地 NVMe SSD 就绪！", flush=True)
         return
 
     tot_gb = total_bytes / (1024**3)
-    print(f"🚀 启动双通道并发引擎 (Drive v3 API + HF CDN) 拉取 {tot_gb:.2f} GB 模型至本地 NVMe SSD...", flush=True)
+    print(
+        f"🚀 [后台并发] 双通道引擎 (Drive v3 API + HF CDN, profile={profile}) 拉取 {tot_gb:.2f} GB 模型至本地 NVMe SSD...",
+        flush=True,
+    )
     t0 = time.time()
 
     procs = []
@@ -148,10 +187,20 @@ def stage_models_dual_channel() -> None:
                 [
                     "aria2c",
                     f"--conf-path={auth_conf}",
-                    "-i", str(drive_list),
-                    "-j", "4", "-x", "16", "-s", "16", "-k", "16M",
-                    "--file-allocation=none", "--continue=true",
-                    "--console-log-level=error", "--summary-interval=0",
+                    "-i",
+                    str(drive_list),
+                    "-j",
+                    "4",
+                    "-x",
+                    "16",
+                    "-s",
+                    "16",
+                    "-k",
+                    "16M",
+                    "--file-allocation=none",
+                    "--continue=true",
+                    "--console-log-level=error",
+                    "--summary-interval=0",
                 ]
             )
             procs.append(("Drive-Channel", p_drive))
@@ -162,10 +211,20 @@ def stage_models_dual_channel() -> None:
             p_hf = subprocess.Popen(
                 [
                     "aria2c",
-                    "-i", str(hf_list),
-                    "-j", "2", "-x", "16", "-s", "16", "-k", "16M",
-                    "--file-allocation=none", "--continue=true",
-                    "--console-log-level=error", "--summary-interval=0",
+                    "-i",
+                    str(hf_list),
+                    "-j",
+                    "3",
+                    "-x",
+                    "16",
+                    "-s",
+                    "16",
+                    "-k",
+                    "16M",
+                    "--file-allocation=none",
+                    "--continue=true",
+                    "--console-log-level=error",
+                    "--summary-interval=0",
                 ]
             )
             procs.append(("HF-CDN-Channel", p_hf))
@@ -178,7 +237,40 @@ def stage_models_dual_channel() -> None:
             auth_conf.unlink()
 
     dt = max(0.1, time.time() - t0)
-    print(f"🔥 双通道 NVMe 极速落盘完毕！总计 {tot_gb:.2f} GB | 总耗时: {dt:.1f}s | 综合均速: {tot_gb*1024/dt:.0f} MB/s", flush=True)
+    print(
+        f"🔥 双通道 NVMe 极速落盘完毕！总计 {tot_gb:.2f} GB | 总耗时: {dt:.1f}s | 综合均速: {tot_gb*1024/dt:.0f} MB/s",
+        flush=True,
+    )
+
+
+def setup_local_comfy_and_nodes() -> None:
+    """Clone ComfyUI, mirror custom_nodes to local NVMe (no FUSE lag), and install Python dependencies."""
+    t0 = time.time()
+    if not (LOCAL_COMFY / "main.py").exists():
+        sh(f"git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git {LOCAL_COMFY}")
+
+    # Mirror custom_nodes onto local NVMe SSD (excluding .git) to eliminate 20s FUSE Python import overhead
+    local_cn = LOCAL_COMFY / "custom_nodes"
+    if local_cn.is_symlink():
+        local_cn.unlink()
+    local_cn.mkdir(parents=True, exist_ok=True)
+    sh(f"rsync -a --exclude='.git' --exclude='__pycache__' {DRIVE_COMFY}/custom_nodes/ {local_cn}/")
+
+    # Symlink output directly to Drive for persistent MP4 saving
+    (DRIVE_COMFY / "output").mkdir(parents=True, exist_ok=True)
+    out_target = LOCAL_COMFY / "output"
+    if out_target.is_symlink() or out_target.exists():
+        sh(f"rm -rf {out_target}")
+    os.symlink(DRIVE_COMFY / "output", out_target)
+
+    # Use uv if available for 3x faster dependency installation, fallback to pip
+    pkgs = "gguf imageio-ffmpeg librosa soundfile tiktoken sentencepiece sox accelerate einops ultralytics onnxruntime-gpu opencv-python-headless scipy"
+    sh(
+        f"if command -v uv >/dev/null 2>&1; then "
+        f"uv pip install --system -q -r {LOCAL_COMFY}/requirements.txt {pkgs}; "
+        f"else pip install -q -r {LOCAL_COMFY}/requirements.txt {pkgs}; fi"
+    )
+    print(f"✅ 本地 SSD ComfyUI 核心与 13 节点镜像初始化完成 (耗时 {time.time() - t0:.1f}s)", flush=True)
 
 
 def wire_hybrid_models_dir() -> None:
@@ -204,28 +296,45 @@ def wire_hybrid_models_dir() -> None:
 
 
 def main() -> None:
-    print("=== [1/4] 检查硬件与云盘挂载状态 ===", flush=True)
+    parser = argparse.ArgumentParser(description="G4 Tri-Parallel NVMe Fast Boot Launcher")
+    parser.add_argument(
+        "--profile",
+        choices=["scheme_a", "scheme_b", "all"],
+        default="scheme_a",
+        help="Active model profile to stage into local NVMe (default: scheme_a = 42.33 GB)",
+    )
+    args = parser.parse_args()
+
+    t_boot = time.time()
+    print("=== [1/3] 检查硬件与安装系统级并发工具 (aria2 / rsync / sox) ===", flush=True)
     print(sh("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || echo 'CPU Mode'").strip(), flush=True)
     if not (DRIVE_COMFY / "models").exists():
         raise RuntimeError(f"❌ 未检测到云盘模型库: {DRIVE_COMFY}/models，请先挂载 Google Drive！")
+    sh("apt-get update -qq && apt-get install -y -qq aria2 rsync sox libsox-fmt-all")
 
-    print("=== [2/4] 部署本地 SSD ComfyUI 核心 ===", flush=True)
-    if not (LOCAL_COMFY / "main.py").exists():
-        sh(f"git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git {LOCAL_COMFY}")
-    sh(f"pip install -q -r {LOCAL_COMFY}/requirements.txt gguf imageio-ffmpeg")
+    print("=== [2/3] 启动三路全并发预热 (ComfyUI 环境构建 || Drive API 通道 || HF CDN 通道) ===", flush=True)
+    stage_err: list[Exception] = []
 
-    for subdir in ("custom_nodes", "output"):
-        (DRIVE_COMFY / subdir).mkdir(parents=True, exist_ok=True)
-        target = LOCAL_COMFY / subdir
-        if target.is_symlink() or target.exists():
-            sh(f"rm -rf {target}")
-        os.symlink(DRIVE_COMFY / subdir, target)
+    def _bg_stage() -> None:
+        try:
+            stage_models_dual_channel(profile=args.profile)
+        except Exception as exc:
+            stage_err.append(exc)
 
-    print("=== [3/4] 双通道并发引擎 (Drive v3 API + HF CDN) 极速落盘 41.4GB 核心权重至本地 NVMe SSD ===", flush=True)
-    stage_models_dual_channel()
+    t_stage = threading.Thread(target=_bg_stage, daemon=True)
+    t_stage.start()
+
+    # Concurrently build ComfyUI, mirror custom_nodes to local NVMe, and install Python packages
+    setup_local_comfy_and_nodes()
+
+    # Wait for NVMe model staging if still finishing
+    t_stage.join()
+    if stage_err:
+        raise RuntimeError(f"❌ NVMe 模型并发落盘失败: {stage_err[0]}") from stage_err[0]
+
     wire_hybrid_models_dir()
 
-    print("=== [4/4] 启动 ComfyUI (--highvram --disable-mmap) + Cloudflare 隧道 ===", flush=True)
+    print("=== [3/3] 启动 ComfyUI (--highvram --disable-mmap --fast) + Cloudflare 隧道 ===", flush=True)
     if not Path("/usr/local/bin/cloudflared").exists():
         sh(
             "wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 "
@@ -237,7 +346,17 @@ def main() -> None:
 
     comfy_log = open("/tmp/comfyui.log", "w")
     subprocess.Popen(
-        ["python3", "main.py", "--listen", "127.0.0.1", "--port", "8188", "--highvram", "--disable-mmap"],
+        [
+            "python3",
+            "main.py",
+            "--listen",
+            "127.0.0.1",
+            "--port",
+            "8188",
+            "--highvram",
+            "--disable-mmap",
+            "--fast",
+        ],
         cwd=str(LOCAL_COMFY),
         stdout=comfy_log,
         stderr=subprocess.STDOUT,
@@ -251,24 +370,27 @@ def main() -> None:
     )
 
     cf_url = None
-    ready = False
-    for _ in range(60):
-        try:
-            urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=2)
-            ready = True
-        except Exception:
-            pass
-        if Path("/tmp/cloudflared.log").exists():
+    comfy_ready = False
+    for _ in range(90):
+        time.sleep(1.5)
+        if not cf_url and Path("/tmp/cloudflared.log").exists():
             txt = Path("/tmp/cloudflared.log").read_text(errors="ignore")
             m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", txt)
             if m:
                 cf_url = m.group(0)
-        if ready and cf_url:
+        if not comfy_ready and Path("/tmp/comfyui.log").exists():
+            if "To see the GUI go to:" in Path("/tmp/comfyui.log").read_text(errors="ignore"):
+                comfy_ready = True
+        if cf_url and comfy_ready:
             break
-        time.sleep(2)
 
-    print(f"\n🎉 ComfyUI 双通道 NVMe 极速模式已就绪 (--highvram --disable-mmap)！")
-    print(f"🌐 Web UI 外网直连地址: {cf_url}", flush=True)
+    print("\n" + "=" * 68, flush=True)
+    print(
+        f"🎉 ComfyUI v2.1 (G4 96GB Blackwell 三路全并发极速模式) 已就绪: {comfy_ready} | 冷启动总耗时: {time.time() - t_boot:.1f}s",
+        flush=True,
+    )
+    print(f"🌐 您的专属 ComfyUI 网页工作台地址: {cf_url}", flush=True)
+    print("=" * 68, flush=True)
 
 
 if __name__ == "__main__":

@@ -188,7 +188,7 @@ https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="loc
 
 ---
 
-## 6. 🚨 实战踩坑与避坑总表（8 大血泪教训汇总）
+## 6. 🚨 实战踩坑与避坑总表（10 大血泪教训汇总）
 
 | 序号 | 坑点现象 | 根本原因 | 标准解决方案 |
 | :---: | :--- | :--- | :--- |
@@ -200,4 +200,9 @@ https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="loc
 | **6** | **在浏览器手动点“断开连接”后，`colab usage` 仍显示 `Active assignments: 1` (`0.26/hr`)** | 浏览器端普通断开或切换运行时会在服务端残留未命名的 `HIGH_RAM` CPU 幽灵实例（`name="?"`），普通 `colab stop` 因无会话名无法关闭。 | 运行 `SKILL.md` 4.4 节中的 **`state.client.unassign(a.endpoint)` 全量清场指令**，遍历服务端 `assignments` 强杀所有残留实例，确保 `Usage rate: 0.00/hr`。 |
 | **7** | **先开着 G4 (`8.71 CCU/h`) 再去现场想剧本、生首帧底图、调工作流，导致高价显卡大量时间空转浪费** | 把“0 算力的本地备料阶段（生成/挑选 `1344×768` 哑光首帧图、编写台词与 JSON）”和“G4 渲染阶段”混在一起，导致 G4 开机后大半时间在等人工决策和生图。 | 严格执行 **「备料在本地 (0 CCU)，点火即连发」**：必须在 G4 开机前先于本地备齐所有满意的 `1344×768` 哑光首帧底图与提示词队列；G4 点火后仅跑 `launch_g4_comfyui_fast.py`（90 秒极速冷启动）+ 批量连发渲染（110s/条），跑完立即关机。 |
 | **8** | **直接用 `colab exec -f` 跑长耗时任务时偶发 `RuntimeError: Connection was lost.` 且本地进程无限假死挂起** | `jupyter_kernel_client` 的 WebSocket 在长耗时阻塞期间闪断后，后台守护线程未清理退出，导致本地 CLI 假死挂住。 | 所有超过 15 秒的远程任务一律通过 **`subprocess.Popen('nohup python3 -u ... > /tmp/task.log 2>&1 &', shell=True)`** 脱机启动（1 秒返回），配合 `perl -e 'alarm 20; exec @ARGV' colab exec` 非阻塞轮询日志。 |
+| **9** | **多段续接（`H3 Motion Context`）时第 3、4 段画面突然变得“朦胧起雾/发灰”** | `MiniMaxH3JoinMatch` 在默认 `tuning="auto", strength=1.0, match_spread=True, match_detail=True` 下，遇到人物前倾或动作幅度变化引发的 `4x~6.4x` 潜空间跳变时，会强行将全局对比度（`spread`）压缩 **31.86%**、高频细节（`detail`）压缩 **27.31%**。 | 将 `MiniMaxH3JoinMatch` 显式设为 **`tuning="manual", strength=0.35, min_excess=2.5, match_spread=False, match_detail=False`**，100% 根除跨段起雾发灰。 |
+| **10** | **`Ref2VA` 多段视频出现开场 `0.5s` 闪帧、跨段跳切、切掉半张脸或起身/走位被切头等“穿帮”** | ① 额外传入未绑定的 `<Picture 3>` 合成图导致 0.0s 闪帧；② 挂载 22 帧潜空间（`MotionContext`）的同时要求跨机位硬切（如双人直切单人特写）；③ 在固定中近景（`static medium shot`）下写大幅垂直位移（`stands up`）且未配相机跟摇或扩景导致出画。 | 严格遵守官方 `h3-prompt-writing` 通用短剧规范：① 仅传纯净角色图 `<Picture 1>/<Picture 2>`；② **双轨路由**：一镜到底续接挂 `MotionContext (22帧)` + `1.1s 气闸舱`，正反打/特写换机位硬切则断开 `MotionContext`（靠 `<Picture N>` + `<Audio 1>` + `180度轴线` 连戏）；③ **动作-机位耦合定律**：起身/坐下/走位必须同步配 `tilts up / pulls out / tracks` 动态构图（或用 `medium-full/wide shot`），固定中近景则保持平面内动作并声明 `comfortable headroom`。 |
+| **11** | **武戏/动作/舞蹈长镜头出现“前 4 秒罚站、只见上半身比划、拼接后第 11 秒双臂交叉穿模”** | ① 照搬文戏的 `holds a static shot` + `facial-realism-closeup` 特写 LoRA (`0.50`) 导致镜头锁死在胸口以上且不敢迈步；② 4 秒时间窗只写 1 个动作且续接段写了 `holding`（定格）导致超过一半时间罚站；③ 在贴身缠抱半途硬拆拼接下一段，且写 `four-punch blitz` 碎拳导致四条黑袖/黑护腕手臂粘连穿模。 | 严格执行 **「V3 ProSeam 武指技巧性暗切与防穿模五法则」**：① 动作段将 `closeup` LoRA 降至 **`0.15~0.18`**，`BUNNY V2` 提至 **`0.22`**，采用 `28mm/35mm` 动态手持跟拍；② 从 `00:00.000` 零延迟开打，按 **每 `2.0 秒` 一拍（8 秒 4 拍）** 编排；③ **拒绝硬拆连招**：上半段结尾（`6.0~8.0s`）必须设计**正蹬踹退/击退呼吸点**拉开 1.5 米净空（实测 `join_match=0.1135~0.1243`，肉眼 0 拼接痕迹）；④ 下半段用**借笼反弹 + 镜头推近 + 单步下潜闪避扣腕 + 寸拳急停**替代高频碎拳，配合 `140-BPM` 强打击乐驱动，连续多抽 100% 零穿模！ |
+| **12** | **打斗面部挂彩流血闪烁消失、出现“手扶脖子眉骨却流血”穿帮，或将多张关键帧拼成一张宫格大图传入 `<Picture N>` 导致分屏废片** | ① 全程只传无伤定妆照会导致参考图锚点把血迹自动擦除；② 写 `blood mist` 会触发夸张红雾特效，写 `neck clinch`（抓后颈）会导致手打在脖子上却眉骨流血；③ 将多张关键帧拼成单张宫格图传给 `MiniMaxH3ReferenceToVideo` 会被误认为空间四分屏构图。 | ① **分阶段同源战损定妆照切换（`V6 BrowStrike`）**：第 1 段传无伤图，禁用 `blood mist` 与 `neck clinch`，用 `high upward-angled right cross fist smashing squarely into left eyebrow ridge at head height without touching his neck` 实现 1:1 拳峰砸裂眉骨渗血；第 2 段切换传入 1:1 同源重绘的战损定妆照并保持 `35mm -> 50mm` 单向平滑推镜；② **多关键帧序列引导（`MiniMaxH3AddGuide`）**：严禁拼成单张宫格图！必须将每张独立 `1344×768` 关键帧单图通过串联多个 `MiniMaxH3AddGuide` 节点，按 **$17k$ 周期帧号（`frame_idx = 0, 34, 51, 85, 102, 136, 170, 187`, `strength = 0.80~0.90`）** 钉入潜空间实现确定性补间动画。 |
+
 

@@ -1,6 +1,6 @@
 ---
 name: colab-ultra-workstation
-description: Google AI Ultra (5x: 1,000 CCU + 20TB / 20x: 2,000 CCU + 30TB Google Drive) 云端算力智能调度与 colab-mcp / colab-dfs-ext 工作站规范。当用户要求连接/使用 Google Colab、零浏览器静默挂载 Google Drive (`colab dfs mount`)、跑 AI 视频模型（MiniMax-H3/Wan2.1/Hunyuan/LTX/ComfyUI）、跑基础大语言模型 LLM（7B/14B/32B/70B 推理或微调）、下载模型权重到 Google Drive 或咨询 Colab 显卡选择（CPU/T4/L4/G4/A100/H100）时必须激活此技能。
+description: "Google AI Ultra (5x 1,000 CCU + 20TB / 20x 2,000 CCU + 30TB Google Drive) 云端算力智能调度与 colab-mcp / colab-dfs-ext 工作站规范。当用户要求连接/使用 Google Colab、零浏览器静默挂载 Google Drive (`colab dfs mount`)、跑 AI 视频模型（MiniMax-H3/Wan2.1/Hunyuan/LTX/ComfyUI）、跑基础大语言模型 LLM（7B/14B/32B/70B 推理或微调）、下载模型权重到 Google Drive 或咨询 Colab 显卡选择（CPU/T4/L4/G4/A100/H100）时必须激活此技能。"
 ---
 
 # Google AI Ultra 云端工作站与智能硬件调度规范 (兼容 5x / 20x 套餐)
@@ -143,10 +143,31 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
      - **铁律 A（备料在本地 `0 CCU`，点火即连发）**：严禁先开着 G4 (`8.71 CCU/h`) 再去现场想剧本、生成首帧底图或调试工作流。所有耗时的人工选图、`1344×768` 哑光首帧图生成与提示词编排必须在 **G4 点火前（0 CCU）** 全部在本地备齐。
      - **铁律 B（双通道并发直拷本地 NVMe SSD，75.4 秒破除 FUSE 限速墙）**：实测 FUSE `mmap` 仅 ~25 MB/s、FUSE 单流顺序读仅 ~62.7 MB/s、单走 Google Drive v3 API 亦受单账号 ~140 MB/s 限速。在 G4 上必须运行 `scripts/launch_g4_comfyui_fast.py` 的 **「双通道并发引擎（Drive v3 API `150 MB/s` + HF CDN `450 MB/s`）」**，仅需 **75.4 秒（均速 463 MB/s）** 即可将 `41.42 GB` 核心权重落入本地 NVMe SSD (`/content/fast_models`)，再由 ComfyUI (`--disable-mmap --highvram`) 以 **`2.5 GB/s`（约 16 秒）** 读入并永久锁死在 96GB 显存中（第 2 条起 0 秒读盘）。
      - **铁律 C（长耗时任务强制 `nohup` 脱机启动 + `alarm` 超时轮询）**：严禁直接用 `colab exec -f` 阻塞运行超过 15 秒的脚本（`wsclient.py` 偶发 `RuntimeError: Connection was lost.` 会导致本地 CLI 守护线程无限假死）。一律用 `subprocess.Popen('nohup python3 -u ... > /tmp/task.log 2>&1 &', shell=True)` 1 秒脱机拉起，再用 `perl -e 'alarm 20; exec @ARGV' colab exec` 轮询日志。
+     - **铁律 D（`3秒~15秒` 全谱系弹性分镜时长矩阵 `F = 17k + 5` 与动作/舞蹈一镜到底长镜头选型准则）**：
+       - **严禁将每个片段机械锁死为 5 秒**！凭借 G4 (96GB) + `NVFP4` 编码器释放的 49GB 激活值显存空间，所有分镜可在 `F(k) = 17k + 5` 合法帧数表内按剧情弹性设定（且不同时长分段可任意通过 `MotionContext(22帧)` 无缝混合续接，优先选 $k \equiv 2 \pmod 3$ 零音频误差黄金帧数）：
+       - **G4 四档弹性 `length` 选型矩阵**：
+         1. **① 快切/反应短镜档（`3.0~3.75秒`）**：`length = 73` (`3.04s`) 或 **`90` ★ (`3.75s`)**，用于快节奏反应特写、拔刀起势、悬疑闪回；
+         2. **② 标准对白主力档（`5.0~6.6秒`）**：`length = 124` (`5.17s`)、**`141` ★ (`5.88s`，续接裁 22 帧后净 `4.96s`)** 或 `158` (`6.58s`)，用于单句/双句核心台词交锋，规避长序列 $\mathcal{O}(L^2)$ 算力开销；
+         3. **③ 中长叙事/走位档（`8.0~10.1秒`）**：**`length = 192` ★ (`8.00s`)** 或 **`243` ★ (`10.13s`)**，用于边走边聊（Walk-and-Talk）跟拍、长独白、第一回合过招；
+         4. **④ 动作/武打/舞蹈一镜到底长镜档（`12.2~15.1秒` 极限长镜或 `192f + 192f` V3 ProSeam 无痕暗切）**：**`length = 294` ★ (`12.25s`)**、**`345` ★ (`14.38s`)**、**`362` (`15.08s`)** 或 **`192f + 192f` (V3 ProSeam 8s+8s 黄金画质无痕接力)**。编写武戏/舞蹈长镜头时，严禁照搬文戏的 `static shot`、严禁在贴身缠抱半途硬拆拼接、严禁写 `four-punch blitz` 高频碎拳，必须严格执行 **「V3 ProSeam 武指技巧性暗切五法则」**：① 将 `facial-realism-closeup` 特写 LoRA 从 `0.50` 降至 **`0.15`**，`BUNNY_H3_ActionLogic_Bridge_V2` 的 `alpha` 从 `0.10` 提至 **`0.22`**，采用 `28mm` 膝上广角动态手持跟拍；② 从 `00:00.000` 零延迟直接开打，按 **每 `2.0 秒` 一拍（8 秒 4 拍）** 编排，取消文戏 `1.1s holding` 定格；③ **上半段结尾（`6.0~8.0s`）必须设计「正蹬踹退/击退呼吸点」**将对手踹退至笼边/墙边拉开 1.5~2 米干净间距，使 `MotionContext(22帧)` 交接处四肢 100% 物理分离（实测 `join_match=0.1243`，肉眼 0 拼接痕迹）；④ 下半段开头采用**手持镜头借势推近（`28mm` $\to$ `35mm`）+ 对手借铁笼反弹扑击 + 单步俯身下潜闪避 + 单手精准扣腕 + 寸拳急停**，配合 `140-BPM` 强打击乐节拍驱动，连续多抽 100% 零穿模。
+     - **铁律 E（独立云端双引擎 TTS 极速工作流：`Qwen3-TTS-1.7B` + `IndexTTS-2`，零 ComfyUI 依赖）**：
+       - **严禁为了制作/调试 TTS 配音而启动庞大的 ComfyUI 及拉取 42GB 视频大模型！**
+       - 制作或微调配音时，一律调用独立云端双引擎语音工作流 [`scripts/launch_cloud_tts_studio.py`](scripts/launch_cloud_tts_studio.py)（本地一键遥控器 [`scripts/run_cloud_tts_remote.py`](scripts/run_cloud_tts_remote.py)）：
+         1. **零 ComfyUI 依赖 + 双引擎显存常驻（`127.0.0.1:8199`）**：不克隆 ComfyUI、不装 15 个视频节点、不拉取 42GB 视频权重。将 **`Qwen3-TTS-12Hz-1.7B` (`VoiceDesign` + `Base`)** 与 **B站 `IndexTTS-2` (`CUDA FP16`)** 同时持久化缓存于 20TB 云盘 `/content/drive/MyDrive/AI_Models/TTS_Cache/`，开机通过 `rsync` 极速同步至本地 NVMe 并双双锁死显存常驻。
+         2. **三大合成模式（`--mode hybrid | qwen | indextts`）**：
+            - `hybrid`（默认黄金双剑合璧）：先用 `Qwen3-TTS-VoiceDesign` + **基频守卫（$F_0$ Pitch Guard）** 从零捏出 100% 非动漫的电影级成熟声线种子（36岁林薇强制锁定 `160–205 Hz` 女中音区，淘汰 `>215 Hz` 少女/动漫音色；42岁陈默锁定 `90–130 Hz` 深沉男中音），再将该种子喂给 **`IndexTTS-2`**，利用 `IndexTTS-2` 的 **8 维情感向量解耦（`emo_vector`）与真人呼吸气口控制** 合成四句对白，彻底解决刚才因使用 `IndexTTS-2` 官方示例二次元干声导致的动漫感问题！
+            - `qwen`：全链路使用 `Qwen3-TTS-VoiceDesign` + `Base` 合成。
+            - `indextts`：直接使用 `IndexTTS-2` 克隆 `/content/drive/MyDrive/AI_Models/TTS_VoiceBank/` 中的自定义真人干声。
+         3. **一键同步至 ComfyUI 输入区与本地试听**：常驻服务每次重跑单句仅需 **~2.5 秒**，自动生成与正片台词 0 重叠的 `voice_*_seed.wav` 及避开 Seg 2 前 14 帧（`0.68s` 安全区）的 `seg01/02_guide_audio.wav`，同步写入 `/content/drive/MyDrive/AI_Workstation/ComfyUI/input/` 并拉回本地 `tts_takes/` 供用户即时试听。
+      - **铁律 F（`MiniMax-H3 Ref2VA` 通用短剧零穿帮与 `H3 Join Match` 零起雾黄金准则）**：
+        - **防起雾发灰**：`MiniMaxH3JoinMatch` 严禁使用默认的 `tuning="auto", strength=1.0, match_spread=True, match_detail=True`（会在人物动作或构图变化时压缩 31%+ 对比度导致画面如蒙灰雾），必须显式设为 **`tuning="manual", strength=0.35, min_excess=2.5, match_spread=False, match_detail=False`**。
+        - **通用短剧防穿帮五大规范（对齐官方 `h3-prompt-writing/references/ref-en.txt` & `base-en.txt`）**：① 仅向 `MiniMaxH3ReferenceToVideo` 传入纯净角色肖像（`<Picture 1>`, `<Picture 2>`），严禁传入未绑定独立 `<Subject N>` 的合成参考图（否则 0.0s–0.5s 必出静态图闪帧跳切）；② `subject_definitions` 末行必须单独声明 `<Audio 1> is the voice-timbre reference for <Subject N> (Sx)...`，`summary` 以 `[reference generation + audio reference]` 开头，台词以 `<d>[Mandarin]...</d>` 包裹；③ **一镜到底 vs 多机位硬切双轨路由**：同机位连续镜头开启 `MotionContext (22帧)` 并在 `00:00.000–00:01.100` 设置闭口微动气闸舱；若剧情需要**正反打（OTS）、全景切单人特写或跨场景转场**，该切镜段必须**断开 `MotionContext`（`clip_index=0`）**从第 0 帧干净建立新机位，靠 `<Picture N>` + `<Audio 1>` + `180度轴线南侧坐标系` 保证 100% 连戏；④ **大幅度动作位移与机位/景别耦合定律（防切头/防出画）**：当角色执行**站起（`stands up`）、坐下（`sits down`）、走位（`walks`）或打斗**时，在中近景下必须同步搭配相机跟移补偿（如 `the camera tilts up and pulls out with small amplitude at slow speed, dynamically reframing to keep the subject's full head inside the frame with comfortable headroom`），或改用中全景/全景（`medium-full / wide shot`）；若刻意锁死固定中近景（`static MCU/Medium Shot`），则将动作约束在当前画幅平面内；⑤ 按段单说话人门控挂载 `32kHz Stereo` 原生自锚定声纹母本 + `T8mars` 情绪解耦协议，实现跨段 `+7.6 ~ +8.2 dB` 真实情绪爆发。
    - 当用户要求运行尚未缓存至云盘的大模型（如 MiniMax-H3 / Wan2.1-14B / 32B / 70B）时，Agent 可全自动串联：
      1. `colab new -s dl`（0 CCU/h 免费 CPU 开机）$\rightarrow$ `colab dfs mount -s dl` $\rightarrow$ 高速下载模型至 20TB/30TB 云盘并通过 Drive v3 API 核验云端 100% 落盘 $\rightarrow$ `colab stop -s dl`（销毁 CPU 实例）；
      2. 本地（`0 CCU`）备齐所有首帧底图与提示词队列 $\rightarrow$ `colab new -s gpu --gpu G4`（秒开 96GB Blackwell G4）$\rightarrow$ `colab dfs mount -s gpu` $\rightarrow$ `nohup` 启动 `scripts/launch_g4_comfyui_fast.py`（75.4 秒双通道 NVMe 极速落盘 + 16 秒进显存常驻）$\rightarrow$ 批量连发完成渲染 $\rightarrow$ 全量强杀销毁 G4 实例停止扣费 $\rightarrow$ `colab usage` 汇报 CCU 余额。
 
 ## 5. 专项高阶实战参考文档 (`references/`)
 
-- **[`references/minimax_h3_uncensored_comfyui_guide.md`](references/minimax_h3_uncensored_comfyui_guide.md)**：当用户咨询或要求部署 **`MiniMax-H3`（海螺 3 开源 33B 音视频原生同出模型）**、**NSFW 无审核破限编码器 (`Qwen3-VL-32B-Ultra-Heretic`)**、**`MiniMax-H3-Turbo` (4/6/8步加速 LoRA)**、ComfyUI 积木式架构、人物一致性锁脸（`ref2va` / `Flux 首帧 + fl2va`）或 2K 视频超分放大时，请优先阅读此参考指南。
+- **[`references/minimax_h3_industrial_workflow_whitepaper.md`](references/minimax_h3_industrial_workflow_whitepaper.md)**（同时位于工作区根目录 [`MiniMax_H3_Industrial_Workflow_Whitepaper.md`](../MiniMax_H3_Industrial_Workflow_Whitepaper.md)）：**MiniMax-H3 工业级写实长视频生成与多角色一致性全链路架构白皮书 (v2.5)**。涵盖方案 A（模块化巅峰画质管线）与方案 B（Director 时间线导演台）双轨交叉互补架构、22 帧（7-Token）零相位潜空间续航、`H3 Join Match` 零发雾手动模式调优、官方 `h3-prompt-writing` (`ref-en.txt`) 零穿帮分镜语法、原生自锚定声纹 (`Self-Anchor Voice`) + `T8mars` 双人跨段情绪爆发协议（实测 `+8.2 dB` 跃迁）、远景小脸 (<40px) 防崩切脸精修、多人不串台、2026 四大开源 TTS 集成，以及 96GB Blackwell (NVFP4) 自动化部署清单。
+- **[`references/minimax_h3_uncensored_comfyui_guide.md`](references/minimax_h3_uncensored_comfyui_guide.md)**：当用户咨询或要求部署 **`MiniMax-H3`（海螺 3 开源 33B 音视频原生同出模型）**、**NSFW 无审核破限编码器 (`Qwen3-VL-32B-Ultra-Heretic`)**、**`MiniMax-H3-Turbo` (4/6/8步加速 LoRA)**、ComfyUI 积木式架构、人物一致性锁脸（`ref2va` / `Flux 首帧 + fl2va`）或 2K 视频超分放大时，请一并参考此指南。
+
