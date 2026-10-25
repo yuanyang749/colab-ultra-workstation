@@ -261,20 +261,28 @@ def setup_local_comfy_and_nodes(refresh_nodes: bool = False) -> None:
         local_cn.unlink()
     local_cn.mkdir(parents=True, exist_ok=True)
 
+    core_repos = {
+        "ComfyUI-H3-Motion-Context": "https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context.git",
+        "BUNNY_H3_Conditioning_Bridge": "https://github.com/aa335615543-ux/BUNNY_H3_Conditioning_Bridge.git",
+        "ComfyUI-VideoHelperSuite": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git",
+        "ComfyUI-KJNodes": "https://github.com/kijai/ComfyUI-KJNodes.git",
+        "ComfyUI-MiniMaxH3-Easy": "https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy.git",
+        "Comfyui_Minimax_h3_latent_Upscaler": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler.git",
+        "ComfyUI-MiniMaxH3_LatentUpscaler": "https://github.com/TripleHeadedMonkey/ComfyUI-MiniMaxH3_LatentUpscaler.git",
+        "ComfyUI-Index-TTS": "https://github.com/chenpipi0807/ComfyUI-Index-TTS.git",
+        "ComfyUI-Qwen-TTS": "https://github.com/flybirdxx/ComfyUI-Qwen-TTS.git",
+    }
+
+    need_repack = refresh_nodes or not NODES_BUNDLE_ARCHIVE.exists()
     if NODES_BUNDLE_ARCHIVE.exists() and not refresh_nodes:
         print(f"⚡ 检测到云盘单文件插件归档包 ({NODES_BUNDLE_ARCHIVE.name})，跳过 FUSE 小文件遍历直接秒级解压...", flush=True)
         sh(f"cp {NODES_BUNDLE_ARCHIVE} /tmp/custom_nodes_bundle.tar.gz && tar -xzf /tmp/custom_nodes_bundle.tar.gz -C {local_cn}/")
-    else:
-        print("⚡ 直接通过机房千兆网并发克隆 7 个核心 H3 节点至本地 NVMe (约 3 秒，零 FUSE I/O 卡顿)...", flush=True)
-        core_repos = {
-            "ComfyUI-H3-Motion-Context": "https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context.git",
-            "BUNNY_H3_Conditioning_Bridge": "https://github.com/aa335615543-ux/BUNNY_H3_Conditioning_Bridge.git",
-            "ComfyUI-VideoHelperSuite": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git",
-            "ComfyUI-KJNodes": "https://github.com/kijai/ComfyUI-KJNodes.git",
-            "ComfyUI-MiniMaxH3-Easy": "https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy.git",
-            "Comfyui_Minimax_h3_latent_Upscaler": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler.git",
-            "ComfyUI-MiniMaxH3_LatentUpscaler": "https://github.com/TripleHeadedMonkey/ComfyUI-MiniMaxH3_LatentUpscaler.git",
-        }
+        # Ensure TTS nodes are also included in the bundle without .git bloat
+        if not (local_cn / "ComfyUI-Index-TTS").exists() or not (local_cn / "ComfyUI-Qwen-TTS").exists():
+            need_repack = True
+
+    if need_repack:
+        print("⚡ 并发补齐/更新核心 H3 + TTS 节点至本地 NVMe 并剔除 .git/__pycache__ 碎片 (约 3 秒)...", flush=True)
         clone_procs = []
         for name, url in core_repos.items():
             target = local_cn / name
@@ -289,7 +297,17 @@ def setup_local_comfy_and_nodes(refresh_nodes: bool = False) -> None:
             bsrc = DRIVE_COMFY / "models/model_patches" / bname
             if bsrc.exists():
                 shutil.copy2(bsrc, bunny_dst / bname)
+        # Strip .git and __pycache__ so the bundle stays ultra-compact and FUSE-friendly
+        sh(f"find {local_cn} \\( -name '.git' -o -name '__pycache__' \\) -prune -exec rm -rf {{}} +")
         sh(f"tar -czf /tmp/custom_nodes_bundle.tar.gz -C {local_cn} . && cp /tmp/custom_nodes_bundle.tar.gz {NODES_BUNDLE_ARCHIVE}")
+
+    # Non-blocking background cleanup of useless .git and __pycache__ fragments inside Drive's unpacked custom_nodes
+    drive_cn = DRIVE_COMFY / "custom_nodes"
+    if drive_cn.exists():
+        subprocess.Popen(
+            f"nohup bash -c \"find {drive_cn} \\( -name '.git' -o -name '__pycache__' \\) -prune -exec rm -rf {{}} +\" >/dev/null 2>&1 &",
+            shell=True,
+        )
 
     # Symlink output directly to Drive for persistent MP4 saving
     (DRIVE_COMFY / "output").mkdir(parents=True, exist_ok=True)
