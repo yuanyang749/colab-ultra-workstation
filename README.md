@@ -127,7 +127,7 @@ git clone https://github.com/yuanyang749/colab-ultra-workstation.git ~/.agents/s
 
 1. **96GB 显存全量锁死（零 CPU Offload）+ 双通道 NVMe 极速冷启动**：
    - 采用 `Singularity v1.3`（8步极速 DiT，`33GB`）+ `Qwen3-VL-32B-Heretic NVFP4`（无审核视觉语言编码器，`9.5GB`）+ `r34l1sm` 皮肤质感 LoRA + `BUNNY V2` 多人动作逻辑桥，总权重 ~43GB 全量常驻 G4 显存，预留 **49GB 纯动态激活值空间**，单次直出支持 **`3.75s ~ 15.08s`（`90 ~ 362 帧`）弹性分镜**。
-   - [`scripts/launch_g4_comfyui_fast.py`](scripts/launch_g4_comfyui_fast.py) 绕开 FUSE 软链接随机读瓶颈，通过「Google Drive 内部 API + HuggingFace 内网 CDN」双通道以 **990 MB/s** 将权重预热至 `/content/local_models` 本地 NVMe SSD，ComfyUI 模型加载仅需 **0.5 秒**。
+   - [`scripts/launch_g4_comfyui_fast.py`](scripts/launch_g4_comfyui_fast.py) (`v2.2`) 绕开 FUSE 软链接随机读与小文件遍历瓶颈，通过「Google Drive v3 API (`~150 MB/s`) + HuggingFace CDN (`~350-450 MB/s`)」双通道与环境构建三路全并发，以 **均速 463 MB/s（仅拉取当前方案所需的 `42.33 GB` 核心权重，耗时 ~75.4 秒）** 极速落盘至 `/content/fast_models` 本地 NVMe SSD，并通过 `custom_nodes_bundle.tar.gz` 单文件归档包 **1.5 秒** 解压 13 套自定义节点（彻底跳过 FUSE 遍历 3,000+ 小文件的 60 秒卡顿），ComfyUI 再以 **`2.5 GB/s`（约 16 秒）** 将模型全量读入 96GB 显存并永久常驻（第 2 次起 **0 秒** 加载）。
 2. **$17k - 12$ / $17k + 5$ 黄金帧数定律与零跳帧、零起雾无缝接力**：
    - 遵循 5-Token $(1,4,4,4,4)=17$ 帧非均匀时间压缩网格，首段采用 $17k - 12$（如 `124` 帧 / `192` 帧），续接段采用 $17k + 5$（如 `141` 帧 / `192` 帧）配合 `MiniMaxH3MotionContext (context_frames = 22)` 物理裁除前 22 帧重叠区实现零相位硬切。
    - 显式配置 `MiniMaxH3JoinMatch (tuning = "manual", strength = 0.35, min_excess = 2.5, match_spread = False, match_detail = False)`，彻底根除多镜头接力后段画面发雾发灰问题。
