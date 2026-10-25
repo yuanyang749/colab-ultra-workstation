@@ -17,6 +17,8 @@ colab-ultra-workstation/
 ├── scripts/
 │   ├── colab_meter.py                                 # 开机打点 + 停机双轨 CCU 计费核验与幽灵实例强杀工具
 │   ├── launch_g4_comfyui_fast.py                      # G4 96GB 双通道并发 (Drive API + HF CDN) NVMe 极速冷启动引擎
+│   ├── resume_from_latent_checkpoint.py               # 分段原生潜变量 (SaveLatent/LoadLatent) 快照注入与零损耗断点续跑生成器
+│   ├── auto_subtitle_video.py                         # 声学包络自动对齐电影级字幕 (SRT/内嵌) + 人物出场动效铭牌压制工具
 │   ├── launch_cloud_tts_studio.py                     # 独立云端双擎 TTS (Qwen3-TTS + IndexTTS-2) 常驻合成服务
 │   ├── run_cloud_tts_remote.py                        # 本地遥控云端 TTS 极速合成与音频回传脚本
 │   ├── setup_minimax_h3_comfyui.py                    # 0 CCU/h 免费 CPU 全自动部署 ComfyUI 与核心模型权重脚本
