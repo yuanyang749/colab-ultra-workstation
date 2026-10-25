@@ -265,8 +265,30 @@ def setup_local_comfy_and_nodes(refresh_nodes: bool = False) -> None:
         print(f"⚡ 检测到云盘单文件插件归档包 ({NODES_BUNDLE_ARCHIVE.name})，跳过 FUSE 小文件遍历直接秒级解压...", flush=True)
         sh(f"cp {NODES_BUNDLE_ARCHIVE} /tmp/custom_nodes_bundle.tar.gz && tar -xzf /tmp/custom_nodes_bundle.tar.gz -C {local_cn}/")
     else:
-        print("📦 首次同步云盘 custom_nodes 至本地 NVMe 并生成单文件加速归档包...", flush=True)
-        sh(f"rsync -a --exclude='.git' --exclude='__pycache__' {DRIVE_COMFY}/custom_nodes/ {local_cn}/")
+        print("⚡ 直接通过机房千兆网并发克隆 7 个核心 H3 节点至本地 NVMe (约 3 秒，零 FUSE I/O 卡顿)...", flush=True)
+        core_repos = {
+            "ComfyUI-H3-Motion-Context": "https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context.git",
+            "BUNNY_H3_Conditioning_Bridge": "https://github.com/aa335615543-ux/BUNNY_H3_Conditioning_Bridge.git",
+            "ComfyUI-VideoHelperSuite": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git",
+            "ComfyUI-KJNodes": "https://github.com/kijai/ComfyUI-KJNodes.git",
+            "ComfyUI-MiniMaxH3-Easy": "https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy.git",
+            "Comfyui_Minimax_h3_latent_Upscaler": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler.git",
+            "ComfyUI-MiniMaxH3_LatentUpscaler": "https://github.com/TripleHeadedMonkey/ComfyUI-MiniMaxH3_LatentUpscaler.git",
+        }
+        clone_procs = []
+        for name, url in core_repos.items():
+            target = local_cn / name
+            if not (target / "__init__.py").exists() and not (target / "nodes.py").exists():
+                shutil.rmtree(target, ignore_errors=True)
+                clone_procs.append(subprocess.Popen(f"git clone --depth 1 -q {url} {target}", shell=True))
+        for cp in clone_procs:
+            cp.wait()
+        bunny_dst = local_cn / "BUNNY_H3_Conditioning_Bridge/models"
+        bunny_dst.mkdir(parents=True, exist_ok=True)
+        for bname in ("BUNNY_H3_ActionLogic_Bridge_V1.safetensors", "BUNNY_H3_ActionLogic_Bridge_V2.safetensors"):
+            bsrc = DRIVE_COMFY / "models/model_patches" / bname
+            if bsrc.exists():
+                shutil.copy2(bsrc, bunny_dst / bname)
         sh(f"tar -czf /tmp/custom_nodes_bundle.tar.gz -C {local_cn} . && cp /tmp/custom_nodes_bundle.tar.gz {NODES_BUNDLE_ARCHIVE}")
 
     # Symlink output directly to Drive for persistent MP4 saving
