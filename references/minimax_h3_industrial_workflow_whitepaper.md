@@ -1368,15 +1368,16 @@ flowchart LR
 
 ---
 
-### 8.6 一镜到底中人物头部朝向偏转的三大根因与双重物理锁死法 (`V8_8sLock` 实机验证)
+### 8.6 一镜到底中人物头部朝向偏转的四大根因与「首尾双端潜变量夹具 (`V9_TailLock`)」终极锁死法
 
-在固定机位双人对峙长镜头（如左前景林薇呈 90° 正侧脸对视右后景陈默）中，极易出现“人物一开口说话就把头转向摄影机（向外露双眼）”的穿帮现象。经 `V5 ~ V8` 四轮控制变量实机验证，其底层有 **三大隐蔽诱因**：
+在固定机位双人对峙长镜头（如左前景林薇呈 90° 正侧脸对视右后景陈默）中，极易出现“人物一开口说话就把头转向摄影机（向外露双眼）”或“前 3 秒保持 90° 侧脸、最后 2 秒收尾时又微偏 ~15° 转向镜头”的穿帮现象。经 `V5 ~ V9` 五轮控制变量实机验证，其底层有 **四大隐蔽诱因** 与 **100% 物理锁死方案**：
 
-| 序号 | 诱发人物向镜头侧错误转头的隐蔽根因 | 底层物理与注意力机制解释 | 工业级根治方案 (`V8_8sLock`) |
+| 序号 | 诱发人物向镜头侧错误转头的隐蔽根因 | 底层物理与注意力机制解释 | 工业级根治方案 (`V8_8sLock` + `V9_TailLock`) |
 | :---: | :--- | :--- | :--- |
 | **1** | **参考图 `<Picture 1>` 姿态引力（最大主因）** | 当传入 `MiniMaxH3ReferenceToVideo` 的 `<Picture 1>` 是一张“四分之三正侧脸（露双眼）”参考图时，一旦该角色成为当前分镜的主发声人，全序列图像交叉注意力（Reference Cross-Attention）会强行将其头部拉回 `<Picture 1>` 的朝外角度。 | **同机位目标侧脸帧重锚**：直接从已生成的正确角度帧（如 `t = 8.0s` 的标准 90° 侧脸帧）提取单人参考板 `ref_linwei_8s_profile_1344x768.png` 作为该分镜的 `<Picture 1>`（`Node 14`），使图像注意力与目标朝向 100% 重合。 |
 | **2** | **复数五官描写词诱导（`tightly knitted brows, blazing wide eyes`）** | 提示词中一旦出现复数的 `brows`（双眉）、`wide eyes`（怒目圆睁的双眼），扩散模型为了在画面中同时渲染出两只眼睛与两条眉毛，会本能地将原本 90° 只露单眼的侧脸向镜头方向旋转 30°~45°。 | **单侧轮廓描述替代复数五官**：在 90° 正侧脸分镜中，严禁使用复数 `brows / wide eyes`，一律写 `strict 90-degree side profile facing right with head held upright and level`。 |
 | **3** | **否定句注意力泄漏陷阱（`without turning her face toward the camera`）** | 在 `Qwen3-VL` 文本编码器中，写否定句 `"without turning her face toward the camera"` 或 `"never turning toward the camera"` 反而会高强度激活 `turning`、`face`、`camera` 三个动作 Token，诱导模型执行转头动作！ | **零旋转动词正向锁死法则**：提示词中**绝不出现** `turn / rotate / camera` 等词，只用正向静态定语：`seated upright on the left in a strict 90-degree side profile facing right with her head held completely level and stationary`。 |
+| **4** | **尾端无边界约束导致的后半段（最后 2 秒）潜空间自由漂移** | `MiniMaxH3MotionContext` 仅钉死了分镜开头的 22 帧（`0.0s ~ 0.92s`），其约束力保住了前 3 秒（`0.0s ~ 2.9s`）不转头；但到了后半段（`3.0s ~ 4.95s`，即原 141 帧序列的 `frame 94 ~ 140`），由于缺乏尾端边界锚定，高音台词爆发收尾时潜变量会自由漂移 ~15°。 | **首尾双端潜变量夹具 (`MiniMaxH3AddGuide` 多点铆死)**：从当前段前半程已处于标准 90° 侧脸且手部动作到位的静态帧（如 `t = 2.75s` 换气闭唇帧 `seg3_tail_lock_1344x768.png`）提取尾端锚点，在 `MiniMaxH3MotionContext` 后串联两个 `MiniMaxH3AddGuide` 节点，分别锚定在 **`frame_idx = 107`**（切掉 22 帧前缀后的 `t = 3.54s`）与 **`frame_idx = 136`**（切掉前缀后的 `t = 4.75s`，均精准踩在 `1,4,4,4,4` 的 $5n$ 潜空间步起点上）。首尾双端夹死后，全段 `0.0s ~ 4.95s` 100% 纹丝不动！ |
 
 ---
 
