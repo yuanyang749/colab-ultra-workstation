@@ -1,0 +1,1046 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "Minimax-h3_Singularity_ref2va_Pruned_v1.3_int8.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "h3-realism-people-t2v-i2v-r2v.safetensors",
+      "strength_model": 0.75
+    }
+  },
+  "3": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "lora_name": "minimax-h3-facial-realism-closeup-cp2000.safetensors",
+      "strength_model": 0.5
+    }
+  },
+  "4": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "strength_model": 0.75
+    }
+  },
+  "5": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "shift_video": 12.0,
+      "shift_audio": 3.0
+    }
+  },
+  "6": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "7": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "8": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "10": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref_linwei_codex_real_1344x768.png"
+    }
+  },
+  "11": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref_chenmo_codex_real_1344x768.png"
+    }
+  },
+  "12": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "native_linwei_seed_stereo.wav"
+    }
+  },
+  "13": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "native_chenmo_seed_stereo.wav"
+    }
+  },
+  "20": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "6",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "audio_vae": [
+        "8",
+        0
+      ],
+      "width": 1344,
+      "height": 768,
+      "length": 124,
+      "ref_image_size": "max",
+      "ref_images.ref_image_0": [
+        "10",
+        0
+      ],
+      "ref_images.ref_image_1": [
+        "11",
+        0
+      ],
+      "ref_audios.ref_audio_0": [
+        "12",
+        0
+      ],
+      "prompt": "subject_definitions:\n<Subject 1> is the 35-year-old Chinese female senior law partner in <Picture 1>, with natural unretouched East Asian facial features, low hair bun held by a black claw clip with loose temple strands, wearing a dark charcoal blazer over a black crew-neck top.\n<Subject 2> is the 40-year-old Chinese man in <Picture 2>, with authentic East Asian facial features, subtle under-eye fatigue and light stubble, short black hair, wearing a dark grey wool blazer over an unbuttoned dark shirt.\n<Audio 1> is the voice-timbre reference for <Subject 1> (S1), providing only her physical female alto vocal identity and not the target dialogue.\n\nsummary:\n[reference generation + audio reference] Inside a Chinese office conference room at night with flat 4000K fluorescent ceiling light, frosted glass partitions, and horizontal venetian blinds, <Subject 1> on the left and <Subject 2> on the right sit across a wooden conference table with a black thermos, open laptop, and stacked paper dossiers. <Subject 1> (S1) delivers a calm, cold ultimatum using the vocal timbre of <Audio 1>, while <Subject 2> listens in silence.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - exact facial bone structure, skin texture, claw-clip hair bun, and dark charcoal blazer from <Picture 1> are strictly preserved on the left side of the frame facing right.\n<Subject 2> (appears in [Shot 1]): fully_preserved - exact facial bone structure, light stubble, and dark grey wool blazer from <Picture 2> are strictly preserved on the right side of the frame facing left, keeping his lips closed throughout this clip.\n<Audio 1>: reference - its physical speaker vocal timbre guides <Subject 1> (S1)'s newly performed Mandarin dialogue without copying the original signal.\n\ndetailed_description:\nr34l1sm, Facial Realism, unretouched candid documentary film still, 50mm f/4 medium-deep focus, flat 4000K Chinese office overhead lighting, natural matte skin texture with real pores, zero oily shine, Rec.709 neutral color. Keep one coherent face belonging only to <Subject 1> on the left and one different coherent face belonging only to <Subject 2> on the right.\n[Shot 1] The camera holds a static shot in a balanced medium two-shot across the wooden conference table with a black thermos, open laptop, and stacked paper dossiers, framing <Subject 1> seated on the left facing right and <Subject 2> seated on the right facing left. During 00:00.000–00:00.450, <Subject 1> (S1) on the left raises her gaze steadily from the folder toward <Subject 2> on the right while both characters keep their mouths closed. During 00:00.450–00:03.900, resting her right hand lightly on the white paper dossier, <Subject 1> (S1) speaks in a calm, composed, icy professional alto voice referenced from <Audio 1> with steady, measured cadence: <d>[Mandarin]这份底牌一旦交出去，就再也收不回来了。</d> She says this line once and completes it by 00:03.900 while <Subject 2> on the right listens silently with a closed mouth. Immediately during 00:03.900–00:05.167, <Subject 1> closes her lips naturally, gives one subtle blink, and maintains a cold, silent gaze across the table toward <Subject 2>. No additional speech, no subtitles.\n\noverall_soundscape:\nQuiet indoor office room tone and subtle fabric rustle continue throughout the scene while <Subject 1> (S1) speaks clearly in the foreground.\n\nnon_diegetic_music:\nN/A"
+    }
+  },
+  "21": {
+    "class_type": "BunnyH3ConditioningBridge",
+    "inputs": {
+      "conditioning": [
+        "20",
+        0
+      ],
+      "adapter": "BUNNY_H3_ActionLogic_Bridge_V2.safetensors",
+      "alpha": 0.1,
+      "magnitude_match": "per_token",
+      "enabled": true
+    }
+  },
+  "22": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 12,
+      "denoise": 1.0
+    }
+  },
+  "23": {
+    "class_type": "MiniMaxH3SigmasTail",
+    "inputs": {
+      "sigmas": [
+        "22",
+        0
+      ],
+      "tail_steps": 3,
+      "strength": 0.5
+    }
+  },
+  "24": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "res_multistep"
+    }
+  },
+  "25": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 2026102201
+    }
+  },
+  "26": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "conditioning": [
+        "21",
+        0
+      ]
+    }
+  },
+  "27": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "25",
+        0
+      ],
+      "guider": [
+        "26",
+        0
+      ],
+      "sampler": [
+        "24",
+        0
+      ],
+      "sigmas": [
+        "23",
+        0
+      ],
+      "latent_image": [
+        "20",
+        1
+      ]
+    }
+  },
+  "30": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "27",
+        0
+      ]
+    }
+  },
+  "31": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "30",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ]
+    }
+  },
+  "32": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "30",
+        1
+      ],
+      "vae": [
+        "8",
+        0
+      ]
+    }
+  },
+  "33": {
+    "class_type": "MiniMaxH3MotionContextTrim",
+    "inputs": {
+      "images": [
+        "31",
+        0
+      ],
+      "audio": [
+        "32",
+        0
+      ],
+      "trim_frames": 0,
+      "fps": 24.0,
+      "match_tail": true
+    }
+  },
+  "34": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "33",
+        0
+      ],
+      "audio": [
+        "33",
+        1
+      ],
+      "fps": 24.0
+    }
+  },
+  "35": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "34",
+        0
+      ],
+      "filename_prefix": "OfficeDuel_V7_8sLock_Seg01",
+      "format": "mp4",
+      "codec": "h264"
+    }
+  },
+  "40": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "6",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "audio_vae": [
+        "8",
+        0
+      ],
+      "width": 1344,
+      "height": 768,
+      "length": 141,
+      "ref_image_size": "max",
+      "ref_images.ref_image_0": [
+        "10",
+        0
+      ],
+      "ref_images.ref_image_1": [
+        "11",
+        0
+      ],
+      "ref_audios.ref_audio_0": [
+        "13",
+        0
+      ],
+      "prompt": "subject_definitions:\n<Subject 1> is the 35-year-old Chinese female senior law partner in <Picture 1>, with natural unretouched East Asian facial features, low hair bun held by a black claw clip, wearing a dark charcoal blazer over a black crew-neck top.\n<Subject 2> is the 40-year-old Chinese man in <Picture 2>, with authentic East Asian facial features, subtle under-eye fatigue and light stubble, short black hair, wearing a dark grey wool blazer over an unbuttoned dark shirt.\n<Audio 1> is the voice-timbre reference for <Subject 2> (S2), providing only his physical male baritone vocal identity and not the target dialogue or emotional delivery.\n\nsummary:\n[reference generation + audio reference] Seamlessly continuing the same medium two-shot across the wooden conference table inside the 4000K office conference room, <Subject 2> (S2) seated on the right responds to <Subject 1> seated on the left in a low, calm, suppressed conversational voice guided by the vocal timbre of <Audio 1>.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - exact facial identity, claw-clip hair bun, and dark charcoal blazer from <Picture 1> are strictly preserved on the left side of the frame facing right, keeping her lips closed and listening silently.\n<Subject 2> (appears in [Shot 1]): fully_preserved - exact facial identity, light stubble, and dark grey wool blazer from <Picture 2> are strictly preserved on the right side of the frame facing left.\n<Audio 1>: reference - its physical speaker timbre guides <Subject 2> (S2)'s newly performed Mandarin dialogue, while emotional inflection, volume, and pacing follow this shot's local performance direction without copying the original signal.\n\ndetailed_description:\nr34l1sm, Facial Realism, unretouched candid documentary film still, 50mm f/4 medium-deep focus, flat 4000K Chinese office overhead lighting, natural matte skin texture with real pores, zero oily shine, Rec.709 neutral color. Keep one coherent face belonging only to <Subject 1> on the left and one different coherent face belonging only to <Subject 2> on the right.\n[Shot 1] The camera holds a static shot, seamlessly continuing the exact medium two-shot framing across the wooden conference table with <Subject 1> seated on the left facing right and <Subject 2> (S2) seated on the right facing left. During 00:00.000–00:01.100, holding the exact closing framing of the previous clip, <Subject 2> (S2) on the right takes a quiet breath, clasps his hands gently on the wooden table, and leans slightly forward in his chair with a calm, composed expression while both characters keep their mouths closed. During 00:01.100–00:04.200, <Subject 2> (S2) speaks calmly in a low, flat, unhurried conversational baritone voice referenced from <Audio 1> with suppressed emotion, relaxed eyebrows, and a slow, even natural cadence: <d>[Mandarin]我等这一天，已经等得太久了。</d> He says this short line once and finishes it within 00:04.200 while <Subject 1> on the left watches him silently with closed lips. Immediately during 00:04.200–00:05.875, <Subject 2> closes his lips, gives one small natural blink, and breathes quietly without words as both hold the silent two-shot standoff. No additional speech, no subtitles.\n\noverall_soundscape:\nQuiet office room tone and subtle sleeve rustle continue throughout the scene while <Subject 2> (S2) speaks calmly in the foreground.\n\nnon_diegetic_music:\nN/A"
+    }
+  },
+  "41": {
+    "class_type": "BunnyH3ConditioningBridge",
+    "inputs": {
+      "conditioning": [
+        "40",
+        0
+      ],
+      "adapter": "BUNNY_H3_ActionLogic_Bridge_V2.safetensors",
+      "alpha": 0.1,
+      "magnitude_match": "per_token",
+      "enabled": true
+    }
+  },
+  "42": {
+    "class_type": "MiniMaxH3MotionContext",
+    "inputs": {
+      "conditioning": [
+        "41",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "latent": [
+        "40",
+        1
+      ],
+      "context_length": "22",
+      "audio_context_length": 18,
+      "context_latent": [
+        "27",
+        0
+      ]
+    }
+  },
+  "45": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 2026102202
+    }
+  },
+  "46": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "conditioning": [
+        "42",
+        0
+      ]
+    }
+  },
+  "47": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "45",
+        0
+      ],
+      "guider": [
+        "46",
+        0
+      ],
+      "sampler": [
+        "24",
+        0
+      ],
+      "sigmas": [
+        "23",
+        0
+      ],
+      "latent_image": [
+        "40",
+        1
+      ]
+    }
+  },
+  "48": {
+    "class_type": "MiniMaxH3JoinMatch",
+    "inputs": {
+      "samples": [
+        "47",
+        0
+      ],
+      "strength": 0.35,
+      "context_length": [
+        "42",
+        1
+      ],
+      "min_excess": 2.5,
+      "match_spread": false,
+      "min_excess_spread": 2.5,
+      "match_detail": false,
+      "min_excess_detail": 2.5,
+      "tuning": "manual",
+      "context_latent": [
+        "27",
+        0
+      ]
+    }
+  },
+  "50": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "48",
+        0
+      ]
+    }
+  },
+  "51": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "50",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ]
+    }
+  },
+  "52": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "50",
+        1
+      ],
+      "vae": [
+        "8",
+        0
+      ]
+    }
+  },
+  "53": {
+    "class_type": "MiniMaxH3MotionContextTrim",
+    "inputs": {
+      "images": [
+        "51",
+        0
+      ],
+      "audio": [
+        "52",
+        0
+      ],
+      "trim_frames": [
+        "42",
+        1
+      ],
+      "fps": 24.0,
+      "match_tail": true
+    }
+  },
+  "54": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "53",
+        0
+      ],
+      "audio": [
+        "53",
+        1
+      ],
+      "fps": 24.0
+    }
+  },
+  "55": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "54",
+        0
+      ],
+      "filename_prefix": "OfficeDuel_V7_8sLock_Seg02",
+      "format": "mp4",
+      "codec": "h264"
+    }
+  },
+  "60": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "6",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "audio_vae": [
+        "8",
+        0
+      ],
+      "width": 1344,
+      "height": 768,
+      "length": 141,
+      "ref_image_size": "max",
+      "ref_images.ref_image_0": [
+        "14",
+        0
+      ],
+      "ref_images.ref_image_1": [
+        "11",
+        0
+      ],
+      "ref_audios.ref_audio_0": [
+        "12",
+        0
+      ],
+      "prompt": "subject_definitions:\n<Subject 1> is the 35-year-old Chinese female senior law partner in <Picture 1>, with natural unretouched East Asian facial features in a clean right-facing side profile, low hair bun held by a black claw clip, wearing a dark charcoal blazer over a black crew-neck top.\n<Subject 2> is the 40-year-old Chinese man in <Picture 2>, with authentic East Asian facial features, subtle under-eye fatigue and light stubble, short black hair, wearing a dark grey wool blazer over an unbuttoned dark shirt.\n<Audio 1> is the voice-timbre reference for <Subject 1> (S1), providing only her physical female alto vocal identity and not the target dialogue or calm emotional delivery.\n\nsummary:\n[reference generation + audio reference] Seamlessly continuing the exact same static medium two-shot across the wooden conference table inside the 4000K office conference room, <Subject 1> (S1) seated on the left strictly maintains her exact level right-facing side-profile head angle from <Picture 1> and the end of the previous clip (looking straight across at <Subject 2> without turning her face toward the camera) as she erupts into fierce, urgent, high-volume anger while preserving her exact female vocal identity from <Audio 1>.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - exact right-facing side-profile head angle (only her right cheek and single right eye visible, far left eye hidden behind her nose bridge, chin held level), claw-clip hair bun, and dark charcoal blazer from <Picture 1> are strictly preserved on the left side of the frame facing right toward <Subject 2>, never turning her face toward the camera.\n<Subject 2> (appears in [Shot 1]): fully_preserved - exact facial identity, light stubble, and dark grey wool blazer from <Picture 2> are strictly preserved on the right side of the frame facing left, keeping his lips closed throughout this clip.\n<Audio 1>: reference - its physical female speaker timbre guides <Subject 1> (S1)'s newly performed Mandarin dialogue, while the loud projected volume, sharp attack, and fierce emotional delivery strictly follow this shot's local performance direction without copying the calm cadence of the original signal.\n\ndetailed_description:\nr34l1sm, Facial Realism, unretouched candid documentary film still, 50mm f/4 medium-deep focus, flat 4000K Chinese office overhead lighting, natural matte skin texture with real pores, zero oily shine, Rec.709 neutral color. Keep one coherent face belonging only to <Subject 1> on the left and one different coherent face belonging only to <Subject 2> on the right.\n[Shot 1] The camera holds a completely static shot, seamlessly continuing the exact medium two-shot framing across the wooden conference table with the black thermos, tablet, and white paper dossier stationary on the desk, framing <Subject 1> (S1) seated on the left in the exact level right-facing side profile of <Picture 1> and <Subject 2> seated on the right facing left. During 00:00.000–00:01.100, holding the exact medium two-shot composition while remaining seated in her chair with her head strictly locked in the level right-facing side-profile angle of <Picture 1> (chin level, only her right cheek and right eye visible, never looking down and never turning toward the camera), <Subject 1> (S1) on the left inhales sharply and presses her right palm firmly down onto the white paper dossier on the table while both characters keep their mouths closed. During 00:01.100–00:04.250, remaining seated on the left and keeping her head strictly locked in that exact level right-facing side profile aimed straight across at <Subject 2> (without rotating her face toward the camera), <Subject 1> (S1) speaks in a state of unrestrained FIERCE ANGER and urgent confrontation (激愤厉声质问), shouting the Mandarin line in a loud, sharp, forceful, high-tension alto voice referenced from <Audio 1>, crisp forceful consonant attack, strongly stressed words, and an urgent incisive rhythm; tense jaw and fierce side-profile gaze aimed straight forward at <Subject 2>; not calm, not restrained, not flat, not gentle, not whispering. Looking straight across the table at <Subject 2> on the right in clean side profile, <Subject 1> (S1) says once: <d>[Mandarin]你知不知道这样做，会毁掉我们所有人！</d> She finishes this line decisively by 00:04.250 while <Subject 2> on the right remains seated and silent with closed lips. Immediately during 00:04.250–00:05.875, <Subject 1> closes her lips firmly, maintaining her exact level right-facing side profile toward <Subject 2> as both remain seated in the medium two-shot. No additional speech, no subtitles.\n\noverall_soundscape:\nCrisp hand palm contact on the paper dossier at 00:00.950 over quiet office room tone, followed by loud, sharp, fiercely angry foreground speech from <Subject 1> (S1), ending in tense quiet room tone.\n\nnon_diegetic_music:\nN/A"
+    }
+  },
+  "61": {
+    "class_type": "BunnyH3ConditioningBridge",
+    "inputs": {
+      "conditioning": [
+        "60",
+        0
+      ],
+      "adapter": "BUNNY_H3_ActionLogic_Bridge_V2.safetensors",
+      "alpha": 0.1,
+      "magnitude_match": "per_token",
+      "enabled": true
+    }
+  },
+  "62": {
+    "class_type": "MiniMaxH3MotionContext",
+    "inputs": {
+      "conditioning": [
+        "61",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "latent": [
+        "60",
+        1
+      ],
+      "context_length": "22",
+      "audio_context_length": 18,
+      "context_latent": [
+        "48",
+        0
+      ]
+    }
+  },
+  "65": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 2026102609
+    }
+  },
+  "66": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "conditioning": [
+        "663",
+        0
+      ]
+    }
+  },
+  "67": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "65",
+        0
+      ],
+      "guider": [
+        "66",
+        0
+      ],
+      "sampler": [
+        "24",
+        0
+      ],
+      "sigmas": [
+        "23",
+        0
+      ],
+      "latent_image": [
+        "663",
+        1
+      ]
+    }
+  },
+  "68": {
+    "class_type": "MiniMaxH3JoinMatch",
+    "inputs": {
+      "samples": [
+        "67",
+        0
+      ],
+      "strength": 0.35,
+      "context_length": [
+        "62",
+        1
+      ],
+      "min_excess": 2.5,
+      "match_spread": false,
+      "min_excess_spread": 2.5,
+      "match_detail": false,
+      "min_excess_detail": 2.5,
+      "tuning": "manual",
+      "context_latent": [
+        "48",
+        0
+      ]
+    }
+  },
+  "70": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "68",
+        0
+      ]
+    }
+  },
+  "71": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "70",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ]
+    }
+  },
+  "72": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "70",
+        1
+      ],
+      "vae": [
+        "8",
+        0
+      ]
+    }
+  },
+  "73": {
+    "class_type": "MiniMaxH3MotionContextTrim",
+    "inputs": {
+      "images": [
+        "71",
+        0
+      ],
+      "audio": [
+        "72",
+        0
+      ],
+      "trim_frames": [
+        "62",
+        1
+      ],
+      "fps": 24.0,
+      "match_tail": true
+    }
+  },
+  "74": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "73",
+        0
+      ],
+      "audio": [
+        "73",
+        1
+      ],
+      "fps": 24.0
+    }
+  },
+  "75": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "74",
+        0
+      ],
+      "filename_prefix": "OfficeDuel_V7_8sLock_Seg03",
+      "format": "mp4",
+      "codec": "h264"
+    }
+  },
+  "80": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "6",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "audio_vae": [
+        "8",
+        0
+      ],
+      "width": 1344,
+      "height": 768,
+      "length": 141,
+      "ref_image_size": "max",
+      "ref_images.ref_image_0": [
+        "14",
+        0
+      ],
+      "ref_images.ref_image_1": [
+        "11",
+        0
+      ],
+      "ref_audios.ref_audio_0": [
+        "13",
+        0
+      ],
+      "prompt": "subject_definitions:\n<Subject 1> is the 35-year-old Chinese female senior law partner in <Picture 1>, with natural unretouched East Asian facial features, low hair bun held by a black claw clip, wearing a dark charcoal blazer over a black crew-neck top.\n<Subject 2> is the 40-year-old Chinese man in <Picture 2>, with authentic East Asian facial features, subtle under-eye fatigue and light stubble, short black hair, wearing a dark grey wool blazer over an unbuttoned dark shirt.\n<Audio 1> is the voice-timbre reference for <Subject 2> (S2), providing only his physical male baritone vocal identity and not the target dialogue or calm emotional delivery.\n\nsummary:\n[reference generation + audio reference] Seamlessly continuing the same medium two-shot confrontation across the wooden conference table inside the 4000K office conference room, <Subject 2> (S2) on the right shifts into unrestrained fury, leaning forward in his seat and pressing his right palm firmly onto the table as he shouts an explosive final warning to <Subject 1> on the left while preserving his exact baritone vocal identity from <Audio 1>.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - exact facial identity, claw-clip hair bun, and dark charcoal blazer from <Picture 1> are strictly preserved on the left side of the frame facing right, watching intently in silence with closed lips while seated.\n<Subject 2> (appears in [Shot 1]): fully_preserved - exact facial identity, light stubble, and dark grey wool blazer from <Picture 2> are strictly preserved on the right side of the frame facing left, now erupting in furious anger while remaining in the medium two-shot frame.\n<Audio 1>: reference - its physical speaker timbre guides <Subject 2> (S2)'s newly performed Mandarin dialogue, while the loud volume, fierce attack, and furious emotional delivery strictly follow this shot's local performance direction without copying the calm cadence of the original signal.\n\ndetailed_description:\nr34l1sm, Facial Realism, unretouched candid documentary film still, 50mm f/4 medium-deep focus, flat 4000K Chinese office overhead lighting, natural matte skin texture with real pores, zero oily shine, Rec.709 neutral color. Keep one coherent face belonging only to <Subject 1> on the left and one different coherent face belonging only to <Subject 2> on the right.\n[Shot 1] The camera holds a static shot, seamlessly continuing the exact medium two-shot framing across the wooden conference table with <Subject 1> seated on the left facing right and <Subject 2> (S2) on the right facing left, keeping both heads fully inside the frame with comfortable headroom. During 00:00.000–00:01.100, holding the exact medium two-shot composition, <Subject 2> (S2) on the right remains seated in his exact spot on the right, leans his upper torso slightly forward, and strikes his right palm firmly down onto the wooden conference table right in front of him while the camera holds the exact same static medium two-shot framing while his head stays well below the top edge of the frame and both characters keep their mouths closed. During 00:01.100–00:04.250, <Subject 2> (S2) speaks in a state of unrestrained FURY (狂怒与强硬震慑), shouting the Mandarin line in an explosively forceful, loud commanding baritone voice referenced from <Audio 1>, harsh angry vocal tone, forceful consonant attack, strongly stressed words, and an abrupt emphatic rhythm; deeply furrowed brows, narrowed piercing eyes, a tense jaw, and visibly tense shoulders; not calm, not restrained, not flat, not gentle, not whispering. Glaring directly across the table at <Subject 1> on the left, <Subject 2> (S2) says once: <d>[Mandarin]有些真相一旦揭开，就没有回头路了！</d> He finishes this line decisively by 00:04.250 while <Subject 1> on the left remains silent with closed lips. Immediately during 00:04.250–00:05.875, <Subject 2> closes his lips firmly, clenches his jaw, and breathes heavily without words as both hold a fierce silent standoff until the end of the shot. No additional speech, no subtitles.\n\noverall_soundscape:\nFirm hand palm impact on the paper dossier on the wooden conference table at 00:00.950 over quiet office room tone, followed by loud, forceful, furious foreground speech from <Subject 2> (S2) with subtle room reverberation, ending in tense quiet room tone.\n\nnon_diegetic_music:\nN/A"
+    }
+  },
+  "81": {
+    "class_type": "BunnyH3ConditioningBridge",
+    "inputs": {
+      "conditioning": [
+        "80",
+        0
+      ],
+      "adapter": "BUNNY_H3_ActionLogic_Bridge_V2.safetensors",
+      "alpha": 0.1,
+      "magnitude_match": "per_token",
+      "enabled": true
+    }
+  },
+  "82": {
+    "class_type": "MiniMaxH3MotionContext",
+    "inputs": {
+      "conditioning": [
+        "81",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "latent": [
+        "80",
+        1
+      ],
+      "context_length": "22",
+      "audio_context_length": 18,
+      "context_latent": [
+        "68",
+        0
+      ]
+    }
+  },
+  "85": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 2026102204
+    }
+  },
+  "86": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "conditioning": [
+        "82",
+        0
+      ]
+    }
+  },
+  "87": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "85",
+        0
+      ],
+      "guider": [
+        "86",
+        0
+      ],
+      "sampler": [
+        "24",
+        0
+      ],
+      "sigmas": [
+        "23",
+        0
+      ],
+      "latent_image": [
+        "80",
+        1
+      ]
+    }
+  },
+  "88": {
+    "class_type": "MiniMaxH3JoinMatch",
+    "inputs": {
+      "samples": [
+        "87",
+        0
+      ],
+      "strength": 0.35,
+      "context_length": [
+        "82",
+        1
+      ],
+      "min_excess": 2.5,
+      "match_spread": false,
+      "min_excess_spread": 2.5,
+      "match_detail": false,
+      "min_excess_detail": 2.5,
+      "tuning": "manual",
+      "context_latent": [
+        "68",
+        0
+      ]
+    }
+  },
+  "90": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "88",
+        0
+      ]
+    }
+  },
+  "91": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "90",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ]
+    }
+  },
+  "92": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "90",
+        1
+      ],
+      "vae": [
+        "8",
+        0
+      ]
+    }
+  },
+  "93": {
+    "class_type": "MiniMaxH3MotionContextTrim",
+    "inputs": {
+      "images": [
+        "91",
+        0
+      ],
+      "audio": [
+        "92",
+        0
+      ],
+      "trim_frames": [
+        "82",
+        1
+      ],
+      "fps": 24.0,
+      "match_tail": true
+    }
+  },
+  "94": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "93",
+        0
+      ],
+      "audio": [
+        "93",
+        1
+      ],
+      "fps": 24.0
+    }
+  },
+  "95": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "94",
+        0
+      ],
+      "filename_prefix": "OfficeDuel_V7_8sLock_Seg04",
+      "format": "mp4",
+      "codec": "h264"
+    }
+  },
+  "14": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref_linwei_8s_profile_1344x768.png"
+    }
+  },
+  "661": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "seg3_tail_lock_1344x768.png"
+    }
+  },
+  "662": {
+    "class_type": "MiniMaxH3AddGuide",
+    "inputs": {
+      "conditioning": [
+        "62",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "latent": [
+        "60",
+        1
+      ],
+      "image": [
+        "661",
+        0
+      ],
+      "frame_idx": 107,
+      "strength": 0.9
+    }
+  },
+  "663": {
+    "class_type": "MiniMaxH3AddGuide",
+    "inputs": {
+      "conditioning": [
+        "662",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "latent": [
+        "662",
+        1
+      ],
+      "image": [
+        "661",
+        0
+      ],
+      "frame_idx": 136,
+      "strength": 0.95
+    }
+  },
+  "901": {
+    "class_type": "H3SaveAVLatent",
+    "inputs": {
+      "latent": [
+        "27",
+        0
+      ],
+      "checkpoint_name": "OfficeDuel_V9_Final_Seg01_av_latent.pt"
+    }
+  },
+  "902": {
+    "class_type": "H3SaveAVLatent",
+    "inputs": {
+      "latent": [
+        "48",
+        0
+      ],
+      "checkpoint_name": "OfficeDuel_V9_Final_Seg02_av_latent.pt"
+    }
+  },
+  "903": {
+    "class_type": "H3SaveAVLatent",
+    "inputs": {
+      "latent": [
+        "68",
+        0
+      ],
+      "checkpoint_name": "OfficeDuel_V9_Final_Seg03_av_latent.pt"
+    }
+  },
+  "904": {
+    "class_type": "H3SaveAVLatent",
+    "inputs": {
+      "latent": [
+        "88",
+        0
+      ],
+      "checkpoint_name": "OfficeDuel_V9_Final_Seg04_av_latent.pt"
+    }
+  }
+}
