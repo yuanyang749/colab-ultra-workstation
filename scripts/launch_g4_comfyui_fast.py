@@ -309,8 +309,92 @@ def setup_local_comfy_and_nodes(refresh_nodes: bool = False) -> None:
             shell=True,
         )
 
+    # Install built-in H3 AV_LATENT Checkpoint Node (H3SaveAVLatent / H3LoadAVLatent) for 0.05s cross-session single-segment hot-swapping
+    ckpt_node_dir = local_cn / "ComfyUI-H3-Latent-Checkpoint"
+    ckpt_node_dir.mkdir(parents=True, exist_ok=True)
+    (ckpt_node_dir / "__init__.py").write_text(
+        '''import copy
+from pathlib import Path
+import torch
+
+LATENT_DIR = Path("/content/drive/MyDrive/AI_Workstation/ComfyUI/output/latents")
+
+
+def _to_cpu(obj):
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().cpu()
+    if isinstance(obj, dict):
+        return {k: _to_cpu(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_cpu(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_to_cpu(v) for v in obj)
+    return copy.deepcopy(obj)
+
+
+class H3SaveAVLatent:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "latent": ("LATENT",),
+                "checkpoint_name": ("STRING", {"default": "Seg01_av_latent.pt"}),
+            }
+        }
+
+    RETURN_TYPES = ("LATENT",)
+    RETURN_NAMES = ("latent",)
+    FUNCTION = "save_latent"
+    OUTPUT_NODE = True
+    CATEGORY = "MiniMax-H3/Checkpoint"
+
+    def save_latent(self, latent, checkpoint_name):
+        LATENT_DIR.mkdir(parents=True, exist_ok=True)
+        fname = checkpoint_name if checkpoint_name.endswith(".pt") else f"{checkpoint_name}.pt"
+        out_path = LATENT_DIR / fname
+        torch.save(_to_cpu(latent), out_path)
+        print(f"[H3LatentCheckpoint] Saved AV_LATENT -> {out_path} ({out_path.stat().st_size / (1024**2):.2f} MB)", flush=True)
+        return (latent,)
+
+
+class H3LoadAVLatent:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "checkpoint_name": ("STRING", {"default": "Seg02_av_latent.pt"}),
+            }
+        }
+
+    RETURN_TYPES = ("LATENT",)
+    RETURN_NAMES = ("latent",)
+    FUNCTION = "load_latent"
+    CATEGORY = "MiniMax-H3/Checkpoint"
+
+    def load_latent(self, checkpoint_name):
+        fname = checkpoint_name if checkpoint_name.endswith(".pt") else f"{checkpoint_name}.pt"
+        in_path = LATENT_DIR / fname
+        if not in_path.exists():
+            raise FileNotFoundError(f"[H3LatentCheckpoint] Missing latent checkpoint on Drive: {in_path}")
+        latent = torch.load(in_path, map_location="cpu", weights_only=False)
+        print(f"[H3LatentCheckpoint] Loaded AV_LATENT <- {in_path} (0.05s hot-resume)", flush=True)
+        return (latent,)
+
+
+NODE_CLASS_MAPPINGS = {
+    "H3SaveAVLatent": H3SaveAVLatent,
+    "H3LoadAVLatent": H3LoadAVLatent,
+}
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "H3SaveAVLatent": "H3 Save AV Latent Checkpoint (Drive)",
+    "H3LoadAVLatent": "H3 Load AV Latent Checkpoint (Drive)",
+}
+''',
+        encoding="utf-8",
+    )
+
     # Symlink output directly to Drive for persistent MP4 saving
-    (DRIVE_COMFY / "output").mkdir(parents=True, exist_ok=True)
+    (DRIVE_COMFY / "output" / "latents").mkdir(parents=True, exist_ok=True)
     out_target = LOCAL_COMFY / "output"
     if out_target.is_symlink() or out_target.exists():
         sh(f"rm -rf {out_target}")

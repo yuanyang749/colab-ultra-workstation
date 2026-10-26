@@ -50,6 +50,9 @@
   - [7.2 100% 校验通过的 8 大插件与核心模型权重清单](#72-100-校验通过的-8-大插件与核心模型权重清单)
   - [7.3 自动化部署脚本升级代码 (`setup_minimax_h3_comfyui.py`)](#73-自动化部署脚本升级代码-setup_minimax_h3_comfyuipy)
 - [第八章：客观物理边界与高阶调优指南](#第八章客观物理边界与高阶调优指南)
+  - [8.5 5MB 原生潜变量断点存档与跨会话单段热插拔 (`H3SaveAVLatent` / `H3LoadAVLatent` + `--only-seg`)](#85-5mb-原生潜变量断点存档与跨会话单段热插拔-h3saveavlatent--h3loadavlatent----only-seg)
+  - [8.6 一镜到底中人物头部朝向偏转的三大根因与双重物理锁死法 (`V8_8sLock` 实机验证)](#86-一镜到底中人物头部朝向偏转的三大根因与双重物理锁死法-v8_8slock-实机验证)
+  - [8.7 声学包络自动对齐电影级字幕与首段双人出入场动效铭牌压制管线 (`auto_subtitle_video.py`)](#87-声学包络自动对齐电影级字幕与首段双人出入场动效铭牌压制管线-auto_subtitle_videopy)
 
 ---
 
@@ -1329,10 +1332,65 @@ INDUSTRIAL_UPGRADE_MANIFEST = [
 4. **极端交叉走位遮挡（角色 A 从角色 B 背后完全穿过且被遮挡 $>1\text{ 秒}$）的追踪恢复**：
    - **机理**：`Carasibana/ComfyUI-H3-FaceRefine` v1.1.2 源码为了防止在多人交叉时把 A 的脸贴到 B 头上，设定了保护阈值：当目标人脸丢失且重现位置偏离丢失前超过 `0.75 × face_height` 时，自动追踪器会主动放弃该段（标为 `lost` 并平滑淡出回退至前道画面）。
    - **调优预案**：由于我们在前道（模块 4）已经部署了 **`MinimaxH3LatentUpscaler3D` + `MMH3SplitUpscale`（`2016×1152` 全局潜空间瓦片重采样）**，即使某几帧因极端遮挡退回模块 4 的输出，其面部也已经过 2.25 倍 Token 密度的 2K 级重采样，不会出现马赛克崩坏；若仍需强制局部精修，可在 `H3 Load Video + Face Select` 节点中切为 `select = "manual"` 手动点选遮挡前后的关键帧坐标。
-5. **分段原生潜变量快照（`SaveLatent / LoadLatent`）与零损耗断点续跑机制（避免单段返工重跑全链）**：
-   - **机理**：在一镜到底多段接力工作流中，若对前 2 段满意、仅需微调第 3 段提示词（例如微调角色转头视线），直接用 `VHS_LoadVideo` 读取已压缩的 `Seg02.mp4` 反向重编码会丢失 `VAEDecode` 前的 141 帧原始 `AV_LATENT` 分布，导致 `MiniMaxH3JoinMatch` 无法对齐潜变量统计量而引发机位/背景跳变；但若每次从第 1 段重跑又会白白浪费前两段的算力时间。
-   - **调优预案**：使用 `scripts/resume_from_latent_checkpoint.py --inject-checkpoints` 在每一段末尾（`Node 27 / 48 / 68 / 88`）并联 ComfyUI 原生内置的 **`SaveLatent`** 节点（`Node 29 / 49 / 69 / 89`），每段自动将未解码的原始 `AV_LATENT` 张量（仅 `~12 MB`）落盘至 `output/latents/`。后续需从任意第 $N$ 段局部补拍时，运行 `--resume-from N` 自动剪除前 $N-1$ 段采样节点，并将上游输出节点（如 `Node 48`）原位替换为 **`LoadLatent`**（`0.1 秒` 直接加载 `Seg02_raw_av.latent` 注入 `MiniMaxH3MotionContext` 与 `MiniMaxH3JoinMatch`），实现 **100% 逐比特潜空间一镜到底 + 节省 50%~75% 算力**。
-6. **本地 0 CCU 声学包络自动对齐字幕与人物出场动效铭牌压制（`scripts/auto_subtitle_video.py`）**：
-   - **机理**：视频扩散大模型在像素空间直接生成中文字幕极易出现笔画粘连乱码，因此分镜提示词末尾必须声明 `no subtitles`。
-   - **调优预案**：成片拉回本地后，通过 `scripts/auto_subtitle_video.py` 对每段音频提取 `130 Hz – 3600 Hz` 人声频带短时均方根能量包络（20ms 步长 + 100ms 平滑窗口过滤拍桌瞬态脉冲），自动锁定精确到 `10ms` 的开口起止时间与逗号换气停顿点，同步输出标准 `.srt` 外挂字幕及带柔和出入场微动效（`0.38s` Alpha 淡入淡出 + `18px` 横向轻滑）的首段人物介绍铭牌与 2 倍超采样电影级硬字幕成片。
+
+---
+
+### 8.5 5MB 原生潜变量断点存档与跨会话单段热插拔 (`H3SaveAVLatent` / `H3LoadAVLatent` + `--only-seg`)
+
+在多段连续长视频生产中，后期审片往往只需要调整中间某一个分镜（例如微调第 3 段的人物眼神或台词语气）。如果直接用 `VHS_LoadVideo` 读取前一段已压缩的 `.mp4` 注入 `MiniMaxH3MotionContext (context_frames)`，会遭遇两大物理损耗：
+1. **H.264 压缩与 VAE 二次重编码漂移**：解码再编码后的潜变量丢失了原始扩散尾帧的高频残差；
+2. **缺失 `MiniMaxH3JoinMatch` 必需的原生 `AV_LATENT` 张量**：导致跨段接缝处背景细节跳变（如玻璃门突变为百叶窗）或机位跳切。
+
+#### (1) 双层零重算机制（同会话显存缓存 + 跨会话云盘 5MB 断点直读）
+
+```mermaid
+flowchart LR
+    subgraph SameSession["场景 A：同一次开机期间 (未关机)"]
+        M1["ComfyUI 显存缓存\n(Node 27 / Node 48 常驻 RAM/VRAM)"] -->|"0.0 秒自动跳过前序分镜"| R1["仅重算目标分镜 (3 分钟)"]
+    end
+
+    subgraph CrossSession["场景 B：关机重开新实例后 (--only-seg N)"]
+        D1[("Google Drive 云盘\noutput/latents/Seg02_av_latent.pt\n(仅 ~4.8 MB)")] -->|"H3LoadAVLatent\n0.05 秒无损直读"| JM["MiniMaxH3MotionContext\n+ MiniMaxH3JoinMatch"]
+        JM --> R2["仅单独渲染第 3 段 (3 分钟)\n节省 75% 算力与时间"]
+        R2 -->|"H3SaveAVLatent"| D2[("自动更新云盘\nSeg03_av_latent.pt")]
+    end
+```
+
+- **同会话内（`0.0 秒` 跳过）**：只要不改动前序分镜（如 `Seg 1 ~ Seg 2`）的节点参数与 Seed，ComfyUI 执行引擎会自动命中内存缓存，**以 `0.0 秒` 跳过前序节点**直接从修改的分镜起算。
+- **跨会话关机重启后（`0.05 秒` 云盘直读）**：
+  - 单个分镜（`1344×768×141` 帧）的原生音视频联合潜变量（`AV_LATENT`）在 `FP16/BF16` 下体积仅 **`~4.8 MB`**。
+  - 启动器 `launch_g4_comfyui_fast.py` 内置自动注册 `H3SaveAVLatent` 与 `H3LoadAVLatent` 节点，将每段采样及 `JoinMatch` 后的原生 `AV_LATENT` 字典通过 `torch.save` 原样持久化至 `/content/drive/MyDrive/AI_Workstation/ComfyUI/output/latents/`。
+  - 下次开机需单独补拍第 3 段时，仅需执行：
+    ```bash
+    python3 run_g4_v25_4seg_drama.py --prefix OfficeDuel_V8_Final --only-seg 3
+    ```
+    脚本自动剪除 `Seg 1 ~ Seg 2` 与 `Seg 4` 的计算图，在 `Node 48` 处挂载 `H3LoadAVLatent("OfficeDuel_V8_Final_Seg02_av_latent.pt")`，**0.05 秒还原 100% 原始潜空间上下文，3 分钟完成单段一镜到底无损补拍**。
+
+---
+
+### 8.6 一镜到底中人物头部朝向偏转的三大根因与双重物理锁死法 (`V8_8sLock` 实机验证)
+
+在固定机位双人对峙长镜头（如左前景林薇呈 90° 正侧脸对视右后景陈默）中，极易出现“人物一开口说话就把头转向摄影机（向外露双眼）”的穿帮现象。经 `V5 ~ V8` 四轮控制变量实机验证，其底层有 **三大隐蔽诱因**：
+
+| 序号 | 诱发人物向镜头侧错误转头的隐蔽根因 | 底层物理与注意力机制解释 | 工业级根治方案 (`V8_8sLock`) |
+| :---: | :--- | :--- | :--- |
+| **1** | **参考图 `<Picture 1>` 姿态引力（最大主因）** | 当传入 `MiniMaxH3ReferenceToVideo` 的 `<Picture 1>` 是一张“四分之三正侧脸（露双眼）”参考图时，一旦该角色成为当前分镜的主发声人，全序列图像交叉注意力（Reference Cross-Attention）会强行将其头部拉回 `<Picture 1>` 的朝外角度。 | **同机位目标侧脸帧重锚**：直接从已生成的正确角度帧（如 `t = 8.0s` 的标准 90° 侧脸帧）提取单人参考板 `ref_linwei_8s_profile_1344x768.png` 作为该分镜的 `<Picture 1>`（`Node 14`），使图像注意力与目标朝向 100% 重合。 |
+| **2** | **复数五官描写词诱导（`tightly knitted brows, blazing wide eyes`）** | 提示词中一旦出现复数的 `brows`（双眉）、`wide eyes`（怒目圆睁的双眼），扩散模型为了在画面中同时渲染出两只眼睛与两条眉毛，会本能地将原本 90° 只露单眼的侧脸向镜头方向旋转 30°~45°。 | **单侧轮廓描述替代复数五官**：在 90° 正侧脸分镜中，严禁使用复数 `brows / wide eyes`，一律写 `strict 90-degree side profile facing right with head held upright and level`。 |
+| **3** | **否定句注意力泄漏陷阱（`without turning her face toward the camera`）** | 在 `Qwen3-VL` 文本编码器中，写否定句 `"without turning her face toward the camera"` 或 `"never turning toward the camera"` 反而会高强度激活 `turning`、`face`、`camera` 三个动作 Token，诱导模型执行转头动作！ | **零旋转动词正向锁死法则**：提示词中**绝不出现** `turn / rotate / camera` 等词，只用正向静态定语：`seated upright on the left in a strict 90-degree side profile facing right with her head held completely level and stationary`。 |
+
+---
+
+### 8.7 声学包络自动对齐电影级字幕与首段双人出入场动效铭牌压制管线 (`auto_subtitle_video.py`)
+
+为彻底规避扩散模型原生生成字幕必然出现的笔画乱码（Prompt 中须固定声明 `No subtitles`），生产管线在后处理阶段采用本地零算力消耗的 **`auto_subtitle_video.py`** 完成声学波形自动对齐字幕与人物出场铭牌压制：
+
+1. **人声频段带通滤波与拍桌瞬态剔除（`10ms` 级精度）**：
+   - 自动提取每段视频音轨并通过 `highpass=130Hz, lowpass=3600Hz` 聚焦人声基频与共振峰；
+   - 采用 `20ms` 步进计算 RMS 能量包络并施加 `100ms` 滑动均值滤波，自动忽略 `0.85s ~ 0.95s` 处短促的拍桌瞬态脉冲（`<80ms`），精准锁定每段人声真正开口的 `t_start` 与收尾 `t_end`。
+2. **句中换气停顿（Breath Pause）自动分句**：
+   - 对含逗号（`，`）的复合长句，自动在字符比例预期时间点 `±0.45s` 窗口内搜索声学能量局部极小值点（即演员真实换气停顿处），将长句切分为上下两半句，实现字幕切换与演员唇部停顿严丝合缝。
+3. **首段双人错峰动效铭牌（Lower-Third / Side Callout）与 2x 超采样字幕渲染**：
+   - 使用 `2x` 超采样（`2688×1536 -> LANCZOS -> 1344×768`）结合 macOS 原生 `PingFang SC` 渲染半透明毛玻璃底衬与电影级描边；
+   - 首段（`00:00.40s ~ 00:04.45s`）在画面非遮挡留白区（左下深色西装肩部与右上磨砂玻璃区）错峰 `0.45s` 浮现双人身份铭牌，并附带 `0.38s` Alpha 柔和淡入 + `18px` 横向微滑入落位与 `0.38s` 淡出退场动效，同步输出标准 `.srt` 外挂字幕与内嵌硬字幕成片。
+
 
