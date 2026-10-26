@@ -140,5 +140,11 @@ git clone https://github.com/yuanyang749/colab-ultra-workstation.git ~/.agents/s
    - **技巧性暗切（拒绝缠斗硬拆）**：上半段结尾（`6.0s~8.0s`）设计正蹬踹退制造 `0.3s` 物理分离呼吸点（`join_match = 0.1135 ~ 0.1243`，肉眼 0 拼接痕迹），下半段借笼反弹 + 顺势推镜 + 单步下潜扣腕寸拳急停，实现 15.08 秒格斗长镜头连续多抽 100% 零穿模。
    - **写实战损与 1:1 受击对齐**：基于无伤定妆照 1:1 同源重绘战损定妆照（[`damaged.png`](references/minimax_h3_industrial_workflow_whitepaper.md)）分段切换，剔除夸张空中血雾，严格匹配高位拳峰直击左眉弓（`without touching his neck`），实现拳峰落点与眉骨裂口流血 100% 物理严丝合缝。
    - **多关键帧序列补间控制**：严禁将多张关键帧拼成单张宫格大图传入 `<Picture N>`；使用官方 `MiniMaxH3AddGuide` 按 **`frame_idx = 17k`（`0, 34, 51, 85, 136, 170`）** 串联钉入独立关键帧单图，实现零抽卡失败率的确定性动作补间。
+5. **按场景隔离的 `workflows/` 独立工作流包 + `5MB` 潜变量单段热插拔 (`--only-seg N`) + 首尾双端潜空间夹具 (`V9_TailLock`)**：
+   - **[`workflows/01_dialogue_2p_photorealistic/`](workflows/01_dialogue_2p_photorealistic/)（真人写实 · 双角色多段连续对手戏独立工作流包）**：
+     - 提供新手零门槛的 40 行配置文件 [`drama_config.json`](workflows/01_dialogue_2p_photorealistic/drama_config.json)，无需修改上千行 ComfyUI 节点图即可一键替换男女主角定妆照、5 秒声纹种子、说话顺序、中文台词、首段出入场毛玻璃人物铭牌及画风模式（`photorealistic` / `stylized`）；
+     - 内置 `H3SaveAVLatent / H3LoadAVLatent`（每段仅 `~4.8 MB` 原生 `AV_LATENT` 断点持久化至云盘），支持通过 `python3 run_drama.py --config drama_config.json --only-seg 3` 在 **3 分钟内（立省 74% 时间与 CCU）** 单独重修任意一段并无缝合成 20 秒母带；
+     - 支持 `MiniMaxH3AddGuide` 尾帧双端潜空间夹具（`frame_idx = [107, 136]`），100% 焊死长镜头末尾角色脸部朝向，彻底杜绝向镜头破轴微转头。
+   - **[`workflows/02_action_mma_combat/`](workflows/02_action_mma_combat/) & [`workflows/03_dance_choreography/`](workflows/03_dance_choreography/)**：独立隔离的高燃动作格斗与长镜头舞蹈专精工作流目录，各场景参数与脚本互不污染。
 
 
