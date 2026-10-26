@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
-"""Automatic Acoustic-Aligned Cinema Subtitle Generator (SRT + Burned-in MP4).
+"""Automatic Acoustic-Aligned Cinema Subtitle & Character Card Generator (SRT + Burned-in MP4).
 
 Features:
-1. Automatically analyzes the audio track of each segment (or full video) using
-   vocal-band RMS energy envelope detection (excluding short impact transients like table slaps)
-   to pinpoint exact speech_start and speech_end timestamps to 10ms precision.
-2. Automatically splits two-clause sentences at the natural acoustic breath pause (local energy minimum)
+1. Reads `drama_config.json` (`--config`) or CLI flags (`--left-card`, `--right-card`, `--no-cards`, `--lines`)
+   so beginners can customize character intro badges and dialogue lines without editing Python code.
+2. Automatically analyzes the audio track of each segment using vocal-band (130Hz-3600Hz) RMS energy envelope
+   detection (excluding short impact transients like table slaps) to pinpoint exact speech_start and speech_end
+   timestamps to 10ms precision.
+3. Automatically splits two-clause sentences at the natural acoustic breath pause (local energy minimum)
    so each clause appears in sync with the actor's actual lip movement.
-3. Outputs both a standard `.srt` file and a cinema-grade burned-in `.mp4` rendered with
-   macOS PingFang SC / Noto Sans CJK (anti-aliased 2x supersampled typography with subtle film shadow).
+4. Outputs both a standard `.srt` file and a cinema-grade burned-in `.mp4` rendered with 2x supersampled
+   anti-aliased typography.
 """
 
 import argparse
 import array
+import json
 import math
 import subprocess
 import tempfile
 import wave
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -29,6 +32,21 @@ DEFAULT_SCRIPT_LINES = [
     ("林薇", "你知不知道这样做，会毁掉我们所有人！"),
     ("陈默", "有些真相一旦揭开，就没有回头路了！"),
 ]
+
+DEFAULT_CARDS = {
+    "role1": {
+        "name_zh": "林 薇",
+        "name_en": "LIN WEI · 35岁",
+        "title_line1": "高级法律合伙人 · 特别合规调查组",
+        "title_line2": "握有境外空壳公司三千万底账核心证据",
+    },
+    "role2": {
+        "name_zh": "陈 默",
+        "name_en": "CHEN MO · 40岁",
+        "title_line1": "集团执行副总裁 · 核心资本操盘手",
+        "title_line2": "瑞士匿名转账幕后签字人",
+    },
+}
 
 
 def load_wav_mono(video_path: Path, sr: int = 16000) -> Tuple[List[float], float]:
@@ -77,7 +95,6 @@ def detect_speech_window_and_pause(
         rms.append(math.sqrt(mean_sq + 1e-12))
     times = [i * (hop_ms / 1000.0) for i in range(n_hops)]
 
-    # Smooth with a 100ms moving average window to reject brief palm-slap impulses (<80ms)
     rms_smooth = []
     for i in range(n_hops):
         lo = max(0, i - 2)
@@ -105,78 +122,68 @@ def detect_speech_window_and_pause(
         t_start = min(t_start, 0.90)
         t_end = max(t_end, min(duration - 0.25, 4.10))
 
-    # Check if we should split into two clauses at comma '，'
     if "，" in text:
         parts = [p.strip() for p in text.split("，", 1) if p.strip()]
         if len(parts) == 2:
-            c1 = parts[0]
-            c2 = parts[1].rstrip("。.")
-            ratio = len(c1) / float(len(c1) + len(c2))
-            expected_split = t_start + (t_end - t_start) * ratio
-            search_indices = [
-                i for i, t in enumerate(times)
-                if (expected_split - 0.45) <= t <= (expected_split + 0.45)
-            ]
-            if search_indices:
-                min_idx = min(search_indices, key=lambda idx: rms_smooth[idx])
-                t_split = times[min_idx]
+            char_ratio = len(parts[0]) / max(1, len(parts[0]) + len(parts[1]))
+            expected_split = t_start + (t_end - t_start) * char_ratio
+            search_lo = max(t_start + 0.55, expected_split - 0.55)
+            search_hi = min(t_end - 0.55, expected_split + 0.55)
+            cand_idx = [i for i, t in enumerate(times) if search_lo <= t <= search_hi]
+            if cand_idx:
+                min_i = min(cand_idx, key=lambda i: rms_smooth[i])
+                t_split = times[min_i]
             else:
                 t_split = expected_split
-            t_split = max(t_start + 0.80, min(t_end - 0.80, t_split))
             return [
-                (t_start, t_split - 0.02, c1),
-                (t_split + 0.02, t_end, c2),
+                (round(t_start, 2), round(max(t_start + 0.4, t_split - 0.04), 2), parts[0]),
+                (round(t_split + 0.04, 2), round(t_end, 2), parts[1]),
             ]
 
-    clean_txt = text.rstrip("。.")
-    return [(t_start, t_end, clean_txt)]
+    return [(round(t_start, 2), round(t_end, 2), text)]
 
 
 def format_srt_time(seconds: float) -> str:
-    ms = int(round(seconds * 1000))
-    hrs = ms // 3600000
-    ms %= 3600000
-    mins = ms // 60000
-    ms %= 60000
-    secs = ms // 1000
-    ms %= 1000
-    return f"{hrs:02d}:{mins:02d}:{secs:02d},{ms:03d}"
+    ms = int(round((seconds - int(seconds)) * 1000))
+    s = int(seconds) % 60
+    m = (int(seconds) // 60) % 60
+    h = int(seconds) // 3600
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def load_cjk_font(size: int) -> ImageFont.FreeTypeFont:
+def load_cjk_font(font_size: int) -> ImageFont.FreeTypeFont:
     font_candidates = [
         "/System/Library/Fonts/PingFang.ttc",
         "/System/Library/Fonts/STHeiti Medium.ttc",
         "/System/Library/Fonts/Hiragino Sans GB.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Medium.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Medium.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     ]
     for fp in font_candidates:
         if Path(fp).exists():
             try:
-                return ImageFont.truetype(fp, size=size, index=0)
+                return ImageFont.truetype(fp, font_size)
             except Exception:
-                return ImageFont.truetype(fp, size=size)
+                continue
     return ImageFont.load_default()
 
 
 def render_subtitle_overlay_png(text: str, width: int, height: int, out_png: Path) -> None:
-    """Render a 2x supersampled transparent PNG subtitle overlay with cinema stroke and drop shadow."""
     scale = 2
     W, H = width * scale, height * scale
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    font_size = int(height * 0.046 * scale)  # ~35px at 768p -> crisp cinema subtitle size
+    font_size = int(height * 0.046 * scale)
     font = load_cjk_font(font_size)
 
     bbox = draw.textbbox((0, 0), text, font=font)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
+
     x = (W - tw) // 2
     y = int(H * 0.885) - th // 2
 
-    # Soft translucent pill backing for maximum legibility over any background
     pad_x, pad_y = int(22 * scale), int(10 * scale)
     draw.rounded_rectangle(
         [x - pad_x, y - pad_y, x + tw + pad_x, y + th + pad_y + int(4 * scale)],
@@ -184,7 +191,6 @@ def render_subtitle_overlay_png(text: str, width: int, height: int, out_png: Pat
         fill=(10, 14, 20, 125),
     )
 
-    # Subtle dark outline + crisp warm-white text
     stroke_w = int(2.5 * scale)
     draw.text(
         (x, y),
@@ -203,9 +209,10 @@ def render_character_intro_overlay_png(
     width: int,
     height: int,
     out_png: Path,
-    mode: str = "both",
+    card_info: Dict[str, str],
+    side: str = "left",
 ) -> None:
-    """Render cinema-grade character introduction badges (Lower-Third / Side Callouts) in Segment 1."""
+    """Render cinema-grade character introduction badge (Lower-Third / Side Callout) in Segment 1."""
     scale = 2
     W, H = width * scale, height * scale
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -215,120 +222,110 @@ def render_character_intro_overlay_png(
     font_en = load_cjk_font(int(12 * scale))
     font_role = load_cjk_font(int(15 * scale))
 
-    def draw_card(x: int, y: int, name_zh: str, name_en: str, role_line1: str, role_line2: str, align_right: bool = False):
-        card_w = int(268 * scale)
-        card_h = int(84 * scale)
-        # Translucent dark slate glass backing
+    align_right = side == "right"
+    x = int(760 * scale) if align_right else int(46 * scale)
+    y = int(180 * scale) if align_right else int(536 * scale)
+
+    card_w = int(268 * scale)
+    card_h = int(84 * scale)
+    draw.rounded_rectangle(
+        [x, y, x + card_w, y + card_h],
+        radius=int(8 * scale),
+        fill=(12, 16, 22, 178),
+        outline=(255, 255, 255, 45),
+        width=max(1, scale // 2),
+    )
+    bar_w = int(4 * scale)
+    if not align_right:
         draw.rounded_rectangle(
-            [x, y, x + card_w, y + card_h],
-            radius=int(8 * scale),
-            fill=(12, 16, 22, 178),
-            outline=(255, 255, 255, 45),
-            width=max(1, scale // 2),
+            [x, y + int(10 * scale), x + bar_w, y + card_h - int(10 * scale)],
+            radius=int(2 * scale),
+            fill=(218, 165, 68, 255),
         )
-        # Gold/amber cinematic vertical accent bar
-        bar_w = int(4 * scale)
-        if not align_right:
-            draw.rounded_rectangle(
-                [x, y + int(10 * scale), x + bar_w, y + card_h - int(10 * scale)],
-                radius=int(2 * scale),
-                fill=(218, 165, 68, 255),
-            )
-            tx = x + int(16 * scale)
-        else:
-            draw.rounded_rectangle(
-                [x + card_w - bar_w, y + int(10 * scale), x + card_w, y + card_h - int(10 * scale)],
-                radius=int(2 * scale),
-                fill=(96, 165, 250, 255),
-            )
-            tx = x + int(16 * scale)
+    else:
+        draw.rounded_rectangle(
+            [x + card_w - bar_w, y + int(10 * scale), x + card_w, y + card_h - int(10 * scale)],
+            radius=int(2 * scale),
+            fill=(96, 165, 250, 255),
+        )
+    tx = x + int(16 * scale)
 
-        # Name + English tag
+    name_zh = card_info.get("name_zh", "")
+    name_en = card_info.get("name_en", "")
+    role_line1 = card_info.get("title_line1", "")
+    role_line2 = card_info.get("title_line2", "")
+
+    draw.text(
+        (tx, y + int(10 * scale)),
+        name_zh,
+        font=font_name,
+        fill=(250, 250, 248, 255),
+        stroke_width=scale,
+        stroke_fill=(0, 0, 0, 180),
+    )
+    nb = draw.textbbox((tx, y + int(10 * scale)), name_zh, font=font_name)
+    draw.text(
+        (nb[2] + int(10 * scale), y + int(21 * scale)),
+        name_en,
+        font=font_en,
+        fill=(190, 200, 215, 220),
+    )
+    draw.text(
+        (tx, y + int(45 * scale)),
+        role_line1,
+        font=font_role,
+        fill=(228, 232, 238, 245),
+    )
+    if role_line2:
         draw.text(
-            (tx, y + int(10 * scale)),
-            name_zh,
-            font=font_name,
-            fill=(250, 250, 248, 255),
-            stroke_width=scale,
-            stroke_fill=(0, 0, 0, 180),
-        )
-        nb = draw.textbbox((tx, y + int(10 * scale)), name_zh, font=font_name)
-        draw.text(
-            (nb[2] + int(10 * scale), y + int(21 * scale)),
-            name_en,
+            (tx, y + int(63 * scale)),
+            role_line2,
             font=font_en,
-            fill=(190, 200, 215, 220),
-        )
-        # Role description
-        draw.text(
-            (tx, y + int(45 * scale)),
-            role_line1,
-            font=font_role,
-            fill=(228, 232, 238, 245),
-        )
-        if role_line2:
-            draw.text(
-                (tx, y + int(63 * scale)),
-                role_line2,
-                font=font_en,
-                fill=(165, 175, 190, 215),
-            )
-
-    if mode in ("linwei", "both"):
-        # Lower-left over Lin Wei's dark blazer shoulder (well clear of her face & bottom subtitle)
-        draw_card(
-            x=int(46 * scale),
-            y=int(536 * scale),
-            name_zh="林 薇",
-            name_en="LIN WEI · 35岁",
-            role_line1="高级法律合伙人 · 特别合规调查组",
-            role_line2="握有境外空壳公司三千万底账核心证据",
-            align_right=False,
-        )
-
-    if mode in ("chenmo", "both"):
-        # Upper-right beside Chen Mo in the clean frosted-glass negative space (clear of his face & the tablet)
-        draw_card(
-            x=int(760 * scale),
-            y=int(180 * scale),
-            name_zh="陈 默",
-            name_en="CHEN MO · 40岁",
-            role_line1="集团执行副总裁 · 核心资本操盘手",
-            role_line2="瑞士匿名转账幕后签字人",
-            align_right=True,
+            fill=(165, 175, 190, 215),
         )
 
     img_down = img.resize((width, height), Image.Resampling.LANCZOS)
     img_down.save(out_png)
 
 
-def build_subtitles_for_four_segments(
+def parse_card_arg(card_str: str, fallback: Dict[str, str]) -> Dict[str, str]:
+    """Parse '姓名|英文名与年龄|头衔第一行|头衔第二行' from CLI string."""
+    parts = [p.strip() for p in card_str.split("|")]
+    return {
+        "name_zh": parts[0] if len(parts) > 0 and parts[0] else fallback["name_zh"],
+        "name_en": parts[1] if len(parts) > 1 else "",
+        "title_line1": parts[2] if len(parts) > 2 else "",
+        "title_line2": parts[3] if len(parts) > 3 else "",
+    }
+
+
+def build_subtitles_for_segments(
     seg_paths: List[Path],
     master_video: Path,
     out_video: Path,
     out_srt: Path,
     script_lines: List[Tuple[str, str]] = DEFAULT_SCRIPT_LINES,
+    enable_cards: bool = True,
+    left_card: Dict[str, str] = DEFAULT_CARDS["role1"],
+    right_card: Dict[str, str] = DEFAULT_CARDS["role2"],
 ) -> List[Tuple[float, float, str, str]]:
     cues: List[Tuple[float, float, str, str]] = []
     offset = 0.0
 
     for idx, seg_path in enumerate(seg_paths):
-        speaker, line = script_lines[idx]
+        speaker, line = script_lines[idx] if idx < len(script_lines) else (f"Seg{idx+1}", "")
         audio, dur = load_wav_mono(seg_path)
-        # Skip the palm press at 0.85s-0.95s in Seg 3 & Seg 4 by setting min_start=1.02s for Seg 2..4
         min_s = 0.45 if idx == 0 else 1.02
         sub_cues = detect_speech_window_and_pause(audio, 16000, dur, line, min_start=min_s)
         for st, et, txt in sub_cues:
             cues.append((offset + st, offset + et, speaker, txt))
         offset += dur
 
-    # Write standard .srt file
     srt_lines = []
     for i, (st, et, spk, txt) in enumerate(cues, 1):
         srt_lines.append(f"{i}\n{format_srt_time(st)} --> {format_srt_time(et)}\n{txt}\n")
     out_srt.write_text("\n".join(srt_lines), encoding="utf-8")
 
-    # Render transparent overlay PNGs for character intro cards + each subtitle cue and composite with ffmpeg
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_dir = Path(tmpdir)
         inputs = ["-i", str(master_video)]
@@ -336,31 +333,30 @@ def build_subtitles_for_four_segments(
         last_v = "[0:v]"
         in_idx = 1
 
-        # 1. Character Introduction Badges in Segment 1 with smooth 0.38s fade-in/out + 18px gentle slide-in
-        intro_lw_png = tmp_dir / "intro_linwei.png"
-        intro_cm_png = tmp_dir / "intro_chenmo.png"
-        render_character_intro_overlay_png(1344, 768, intro_lw_png, mode="linwei")
-        render_character_intro_overlay_png(1344, 768, intro_cm_png, mode="chenmo")
+        if enable_cards:
+            intro_lw_png = tmp_dir / "intro_left.png"
+            intro_cm_png = tmp_dir / "intro_right.png"
+            render_character_intro_overlay_png(1344, 768, intro_lw_png, left_card, side="left")
+            render_character_intro_overlay_png(1344, 768, intro_cm_png, right_card, side="right")
 
-        inputs.extend(["-loop", "1", "-t", "5.0", "-i", str(intro_lw_png), "-loop", "1", "-t", "5.0", "-i", str(intro_cm_png)])
-        lw_idx = in_idx
-        in_idx += 1
-        cm_idx = in_idx
-        in_idx += 1
+            inputs.extend(["-loop", "1", "-t", "5.0", "-i", str(intro_lw_png), "-loop", "1", "-t", "5.0", "-i", str(intro_cm_png)])
+            lw_idx = in_idx
+            in_idx += 1
+            cm_idx = in_idx
+            in_idx += 1
 
-        filter_parts.append(
-            f"[{lw_idx}:v]format=rgba,fade=t=in:st=0.40:d=0.38:alpha=1,fade=t=out:st=3.97:d=0.38:alpha=1[lw_a];"
-            f"{last_v}[lw_a]overlay=x='if(lt(t,0.78),-18*(1-(t-0.40)/0.38),0)':y=0:enable='between(t,0.40,4.35)'[v_lw]"
-        )
-        last_v = "[v_lw]"
+            filter_parts.append(
+                f"[{lw_idx}:v]format=rgba,fade=t=in:st=0.40:d=0.38:alpha=1,fade=t=out:st=3.97:d=0.38:alpha=1[lw_a];"
+                f"{last_v}[lw_a]overlay=x='if(lt(t,0.78),-18*(1-(t-0.40)/0.38),0)':y=0:enable='between(t,0.40,4.35)'[v_lw]"
+            )
+            last_v = "[v_lw]"
 
-        filter_parts.append(
-            f"[{cm_idx}:v]format=rgba,fade=t=in:st=0.85:d=0.38:alpha=1,fade=t=out:st=4.07:d=0.38:alpha=1[cm_a];"
-            f"{last_v}[cm_a]overlay=x='if(lt(t,1.23),18*(1-(t-0.85)/0.38),0)':y=0:enable='between(t,0.85,4.45)'[v_cm]"
-        )
-        last_v = "[v_cm]"
+            filter_parts.append(
+                f"[{cm_idx}:v]format=rgba,fade=t=in:st=0.85:d=0.38:alpha=1,fade=t=out:st=4.07:d=0.38:alpha=1[cm_a];"
+                f"{last_v}[cm_a]overlay=x='if(lt(t,1.23),18*(1-(t-0.85)/0.38),0)':y=0:enable='between(t,0.85,4.45)'[v_cm]"
+            )
+            last_v = "[v_cm]"
 
-        # 2. Acoustic-aligned dialogue subtitles with soft 0.10s fade-in/out
         for i, (st, et, _spk, txt) in enumerate(cues):
             png_path = tmp_dir / f"sub_{i:02d}.png"
             render_subtitle_overlay_png(txt, 1344, 768, png_path)
@@ -392,23 +388,70 @@ def build_subtitles_for_four_segments(
     return cues
 
 
+# Backward-compatible alias
+build_subtitles_for_four_segments = build_subtitles_for_segments
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Acoustic-Aligned Subtitle & Character Intro Card Renderer")
+    parser.add_argument("--config", default=None, help="Path to drama_config.json (loads lines & character cards automatically)")
     parser.add_argument("--root", default="/Users/delroy/Documents/Playground/test001")
-    parser.add_argument("--seg-prefix", default="OfficeDuel_V6_OneShot")
-    parser.add_argument("--master", default="MiniMax_H3_v25_20s_V6_OneShot_HeadTurn.mp4")
-    parser.add_argument("--out", default="MiniMax_H3_v25_20s_V6_OneShot_Subtitled.mp4")
-    parser.add_argument("--srt", default="MiniMax_H3_v25_20s_V6_OneShot.srt")
+    parser.add_argument("--seg-prefix", default=None)
+    parser.add_argument("--master", default=None)
+    parser.add_argument("--out", default=None)
+    parser.add_argument("--srt", default=None)
+    parser.add_argument("--lines", default=None, help="Pipe-separated dialogue lines per segment: '台词1|台词2|台词3|台词4'")
+    parser.add_argument("--left-card", default=None, help="Left character card: '姓名|英文或年龄|头衔1|头衔2'")
+    parser.add_argument("--right-card", default=None, help="Right character card: '姓名|英文或年龄|头衔1|头衔2'")
+    parser.add_argument("--no-cards", action="store_true", help="Disable Segment 1 character introduction cards")
     args = parser.parse_args()
 
+    cfg = {}
+    if args.config and Path(args.config).exists():
+        cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
+
     root = Path(args.root)
-    segs = [root / f"{args.seg_prefix}_Seg0{i}.mp4" for i in (1, 2, 3, 4)]
-    cues = build_subtitles_for_four_segments(
+    seg_prefix = args.seg_prefix or cfg.get("project_prefix") or "OfficeDuel_V9_Final"
+    master_name = args.master or cfg.get("output_mp4") or f"{seg_prefix}_Master.mp4"
+    out_name = args.out or master_name.replace(".mp4", "_Subtitled.mp4")
+    srt_name = args.srt or master_name.replace(".mp4", ".srt")
+
+    chars = cfg.get("characters", {})
+    left_card = copy_card = dict(DEFAULT_CARDS["role1"])
+    right_card = dict(DEFAULT_CARDS["role2"])
+    if "role1" in chars:
+        left_card.update({k: v for k, v in chars["role1"].items() if k in left_card})
+    if "role2" in chars:
+        right_card.update({k: v for k, v in chars["role2"].items() if k in right_card})
+    if args.left_card:
+        left_card = parse_card_arg(args.left_card, left_card)
+    if args.right_card:
+        right_card = parse_card_arg(args.right_card, right_card)
+
+    enable_cards = (not args.no_cards) and cfg.get("enable_intro_cards", True)
+
+    script_lines = list(DEFAULT_SCRIPT_LINES)
+    if cfg.get("segments"):
+        script_lines = []
+        for s in cfg["segments"]:
+            spk_key = s.get("speaker", "role1")
+            spk_name = chars.get(spk_key, {}).get("name_zh", spk_key).replace(" ", "")
+            script_lines.append((spk_name, s.get("line", "")))
+    if args.lines:
+        raw_parts = [p.strip() for p in args.lines.split("|") if p.strip()]
+        script_lines = [(f"Seg{i+1}", ln) for i, ln in enumerate(raw_parts)]
+
+    segs = [root / f"{seg_prefix}_Seg0{i}.mp4" for i in range(1, len(script_lines) + 1)]
+    cues = build_subtitles_for_segments(
         segs,
-        root / args.master,
-        root / args.out,
-        root / args.srt,
+        root / master_name,
+        root / out_name,
+        root / srt_name,
+        script_lines=script_lines,
+        enable_cards=enable_cards,
+        left_card=left_card,
+        right_card=right_card,
     )
-    print(f"✅ 自动声学对齐字幕生成完成: {root / args.out} & {root / args.srt}")
+    print(f"✅ 自动声学对齐字幕生成完成: {root / out_name} & {root / srt_name}")
     for st, et, spk, txt in cues:
         print(f"  [{st:05.2f}s -> {et:05.2f}s] ({spk}) {txt}")

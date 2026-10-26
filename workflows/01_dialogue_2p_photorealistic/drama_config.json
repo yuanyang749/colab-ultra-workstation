@@ -1,0 +1,61 @@
+{
+  "project_prefix": "OfficeDuel_V9_Final",
+  "output_mp4": "MiniMax_H3_v25_20s_V9_Master.mp4",
+  "style_mode": "photorealistic",
+  "realism_lora_strength": 0.75,
+  "closeup_lora_strength": 0.50,
+  "bunny_alpha": 0.10,
+  "enable_intro_cards": true,
+  "characters": {
+    "role1": {
+      "name_zh": "林 薇",
+      "name_en": "LIN WEI · 35岁",
+      "title_line1": "高级法律合伙人 · 特别合规调查组",
+      "title_line2": "握有境外空壳公司三千万底账核心证据",
+      "image_seg1": "ref_linwei_codex_real_1344x768.png",
+      "image_chained": "ref_linwei_8s_profile_1344x768.png",
+      "voice_wav": "native_linwei_seed_stereo.wav"
+    },
+    "role2": {
+      "name_zh": "陈 默",
+      "name_en": "CHEN MO · 40岁",
+      "title_line1": "集团执行副总裁 · 核心资本操盘手",
+      "title_line2": "瑞士匿名转账幕后签字人",
+      "image_seg1": "ref_chenmo_codex_real_1344x768.png",
+      "image_chained": "ref_chenmo_codex_real_1344x768.png",
+      "voice_wav": "native_chenmo_seed_stereo.wav"
+    }
+  },
+  "segments": [
+    {
+      "seg_id": 1,
+      "speaker": "role1",
+      "line": "这份底牌一旦交出去，就再也收不回来了。",
+      "seed": 2026102201,
+      "tail_lock_image": null
+    },
+    {
+      "seg_id": 2,
+      "speaker": "role2",
+      "line": "我等这一天，已经等得太久了。",
+      "seed": 2026102202,
+      "tail_lock_image": null
+    },
+    {
+      "seg_id": 3,
+      "speaker": "role1",
+      "line": "你知不知道这样做，会毁掉我们所有人！",
+      "seed": 2026102609,
+      "tail_lock_image": "seg3_tail_lock_1344x768.png",
+      "tail_lock_frames": [107, 136],
+      "tail_lock_strengths": [0.90, 0.95]
+    },
+    {
+      "seg_id": 4,
+      "speaker": "role2",
+      "line": "有些真相一旦揭开，就没有回头路了！",
+      "seed": 2026102204,
+      "tail_lock_image": null
+    }
+  ]
+}
