@@ -1,0 +1,498 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "h3-realism-people-t2v-i2v-r2v.safetensors",
+      "strength_model": 0.6
+    }
+  },
+  "3": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "lora_name": "minimax-h3-facial-realism-closeup-cp2000.safetensors",
+      "strength_model": 0.2
+    }
+  },
+  "4": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "lora_name": "minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors",
+      "strength_model": 0.55
+    }
+  },
+  "5": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "shift_video": 12.0,
+      "shift_audio": 1.2
+    }
+  },
+  "6": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "7": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "8": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "10": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref_lumine_opening_768x1344.png"
+    }
+  },
+  "12": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "seg01_bgm_8s.wav"
+    }
+  },
+  "13": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "seg02_bgm_8s.wav"
+    }
+  },
+  "14": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 16,
+      "denoise": 1.0
+    }
+  },
+  "15": {
+    "class_type": "MiniMaxH3SigmasTail",
+    "inputs": {
+      "sigmas": [
+        "14",
+        0
+      ],
+      "tail_steps": 3,
+      "strength": 0.7
+    }
+  },
+  "16": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "res_multistep"
+    }
+  },
+  "20": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "6",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "audio_vae": [
+        "8",
+        0
+      ],
+      "width": 768,
+      "height": 1344,
+      "length": 192,
+      "ref_image_size": "match",
+      "ref_images.ref_image_0": [
+        "10",
+        0
+      ],
+      "ref_audios.ref_audio_0": [
+        "12",
+        0
+      ],
+      "prompt": "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nsubject_definitions:\n<Subject 1> is the exact performer shown in <Picture 1>. <Picture 1> is the sole and absolute visual authority for <Subject 1>'s facial identity, facial structure, skin tone, hairstyle, body proportions, outfit, footwear, accessories, and the surrounding physical environment — nothing about appearance, clothing, or background is redefined in words.\n<Audio 1> is the target musical audio track driving the rhythm, beat accents, and phrase transitions of this 8.0-second segment (detected tempo ~{bpm} BPM, beat interval ~{beat_s}s; key musical accents at {s1_accents}).\n\nsummary:\n[reference generation + audio reuse] Segment 01 of an unbroken 15.08-second vertical 9:16 live-action dance performance (0.000s–8.000s). Starting from the exact opening pose and framing of <Picture 1>, <Subject 1> awakens on the beat, waves a warm greeting, extends an index finger toward the lens while the camera synchronously pushes in to a medium close-up, gives a shy giggle with a wink, and grooves into rhythmic hip-pop hand sweeps and alternating chest-level fist pumps as the camera smoothly pulls back to full-body framing.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - Strictly preserve 100% of the exact facial identity, natural skin tone, hairstyle, outfit, footwear, and physical background environment from <Picture 1>. Single solo performer only; no extra people.\n<Audio 1>: fully_copy - Reused 1:1 as the complete final audio track; synchronize every knee bounce, hip pop, and gesture accent directly to <Audio 1>.\n\ndetailed_description:\nr34l1sm, Facial Realism, vertical 9:16 live-action smartphone dance video matching the exact lighting, environment, outfit, and subject identity of <Picture 1>, crisp 1/200s shutter motion clarity, authentic skin texture, natural fabric and hair physics.\n[Shot 1] SUSTAINED LAYER (continuous throughout 00:00.000–00:08.000): <Subject 1> maintains a continuous elastic knee-bounce groove on every musical beat of <Audio 1> (~{beat_s}s cycle, Chain A1 + B1 engine), weight rebounding lightly between the balls of both feet while hair and garment hem sway naturally with each weight shift, keeping a sweet natural closed-lip smile throughout.\n00:00.000–{t_s1_w1_end} (CHAIN A12 to K44 — Greeting Awakening): Starting from the exact opening pose of <Picture 1>, at {t_s1_a1} <Subject 1> rebounds softly through the knees, brings the right hand up to chest-shoulder height, and waves an open palm warmly at the camera while tilting the head 10 degrees right on the {t_s1_a2} beat with a sweet natural smile. Camera holds the stable full-body vertical framing of <Picture 1>.\n{t_s1_w1_end}–{t_s1_w2_end} (CHAIN A11 + K8 — Camera Poke & Giggle with 1:1 Synced Push-Pull): During {t_s1_w1_end}–{t_s1_a3}, <Subject 1> places the left hand on the hip and extends the right index finger straight forward toward the lens in a playful fourth-wall poke landing on the {t_s1_a3} musical accent; SYNCHRONIZED 1:1 WITH THE ARM EXTENSION during {t_s1_w1_end}–{t_s1_a3}, the physical camera smoothly pushes in from full-body framing to a waist-up medium close-up, arriving at peak close-up framing at the exact {t_s1_a3} finger-poke apex. During {t_s1_a3}–{t_s1_a4}, holding the medium close-up, <Subject 1> curls the right hand daintily near the chin (without blocking the face) in a cute shy giggle while winking one eye. During {t_s1_a4}–{t_s1_w2_end}, as <Subject 1> opens both arms gracefully downward to the sides, the camera synchronously pulls all the way back to the full-body vertical framing of <Picture 1> by {t_s1_w2_end}.\n{t_s1_w2_end}–{t_s1_w3_end} (CHAIN B10 + B12 — Hip-Pop Pendulum Groove & Wrist Rolls): Holding the full-body vertical framing of <Picture 1>, <Subject 1> pops the right hip out on the {t_s1_a5} beat while sweeping both forearms diagonally right at mid-torso, then mirrors a crisp left hip pop on the {t_s1_a6} beat while sweeping both hands left as the outfit hem sways side to side. During {t_s1_a6}–{t_s1_w3_end}, <Subject 1> executes two inward wrist rolls in front of the chest (Chain B12) and flips both palms upward in an inviting gesture on the {t_s1_a7} beat.\n{t_s1_w3_end}–00:08.000 (CHAIN A3 — Alternating Bouncy Chest Punches & Transition Hook): In full-body framing during {t_s1_w3_end}–{t_s1_a10}, <Subject 1> pumps small energetic alternating fists forward at chest level on the {t_s1_w3_end}, {t_s1_a8}, {t_s1_a9}, and {t_s1_a10} musical beats while the knees bounce rhythmically. During {t_s1_a10}–00:08.000 (exit state hook), <Subject 1> gathers both hands together at chest height on the {t_s1_a11} beat with weight loaded onto the left foot in full-body framing, ready to launch seamlessly into the next phrase.\n\noverall_soundscape:\nN/A — the reused <Audio 1> is the complete final audio track.\n\nnon_diegetic_music:\nN/A — <Audio 1> is directly reused 1:1 as the complete final audio track."
+    }
+  },
+  "21": {
+    "class_type": "BunnyH3ConditioningBridge",
+    "inputs": {
+      "conditioning": [
+        "20",
+        0
+      ],
+      "adapter": "BUNNY_H3_ActionLogic_Bridge_V2.safetensors",
+      "alpha": 0.22,
+      "magnitude_match": "per_token",
+      "enabled": true
+    }
+  },
+  "25": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 2026103101
+    }
+  },
+  "26": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "conditioning": [
+        "21",
+        0
+      ]
+    }
+  },
+  "27": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "25",
+        0
+      ],
+      "guider": [
+        "26",
+        0
+      ],
+      "sampler": [
+        "16",
+        0
+      ],
+      "sigmas": [
+        "15",
+        0
+      ],
+      "latent_image": [
+        "20",
+        1
+      ]
+    }
+  },
+  "30": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "27",
+        0
+      ]
+    }
+  },
+  "31": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "30",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ]
+    }
+  },
+  "32": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "30",
+        1
+      ],
+      "vae": [
+        "8",
+        0
+      ]
+    }
+  },
+  "33": {
+    "class_type": "MiniMaxH3MotionContextTrim",
+    "inputs": {
+      "images": [
+        "31",
+        0
+      ],
+      "audio": [
+        "32",
+        0
+      ],
+      "trim_frames": 0,
+      "fps": 24.0,
+      "match_tail": true
+    }
+  },
+  "34": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "33",
+        0
+      ],
+      "audio": [
+        "33",
+        1
+      ],
+      "fps": 24.0
+    }
+  },
+  "35": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "34",
+        0
+      ],
+      "filename_prefix": "DouyinDance_Lumine_15s_V1_Seg01",
+      "format": "mp4",
+      "codec": "h264"
+    }
+  },
+  "40": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "6",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "audio_vae": [
+        "8",
+        0
+      ],
+      "width": 768,
+      "height": 1344,
+      "length": 192,
+      "ref_image_size": "match",
+      "ref_images.ref_image_0": [
+        "10",
+        0
+      ],
+      "ref_audios.ref_audio_0": [
+        "13",
+        0
+      ],
+      "prompt": "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced for identity, skin tone, outfit, and environment.\n\nsubject_definitions:\n<Subject 1> is the exact same performer shown in <Picture 1>. <Picture 1> is the sole and absolute visual authority for <Subject 1>'s facial identity, warm natural skin tone, hairstyle, body proportions, outfit, footwear, and the surrounding physical environment — nothing about appearance, clothing, or background is redefined in words.\n<Audio 1> is the target musical audio track for Segment 02 (detected tempo ~{bpm} BPM, beat interval ~{beat_s}s; key musical accents at {s2_accents}).\n\nsummary:\n[reference generation + audio reuse] Seamlessly continuing the unbroken 15.08-second vertical 9:16 live-action dance long take from Segment 01, <Subject 1> transitions from the chest-level hand gather into diagonal overhead arm reaches with playful heel-kick skips, snaps a cute forehead salute, executes a brisk 360-degree clockwise spot spin on the beat landing directly into the exact frontal face and sweet smile of <Picture 1>, and finishes with a chest-level finger-heart and hands-on-hips head-tilt pose.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - Strictly preserve 100% of the exact facial identity, natural skin tone, hairstyle, outfit, footwear, and background environment from <Picture 1>. Do NOT reset to a static pose at 0.000s; continue seamlessly from the incoming motion context.\n<Audio 1>: fully_copy - Reused 1:1 as the complete final audio track; synchronize every dance accent and spin landing directly to <Audio 1>.\n\ndetailed_description:\nr34l1sm, Facial Realism, vertical 9:16 live-action smartphone dance video matching the exact lighting, environment, outfit, and subject identity of <Picture 1>, consistent natural skin tone throughout, crisp 1/200s shutter motion clarity, authentic skin texture, realistic centrifugal fabric and hair physics.\n[Shot 1] SUSTAINED LAYER (continuous through 00:00.000–{t_s2_freeze}): <Subject 1> maintains the elastic knee-bounce groove on every musical beat of <Audio 1> (~{beat_s}s cycle), keeping the full head and full body clearly inside the vertical frame with an unchanging sweet natural smile.\n00:00.000–00:00.917 (Seamless Motion Bridge): Holding the exact incoming full-body framing and chest-level hand gather from the end of Segment 01, <Subject 1> completes the soft knee rebound with weight on the left foot.\n00:00.917–{t_s2_w1_end} (CHAIN K45 + A5 — Diagonal Overhead Reach & Cute Salute): During 00:00.917–{t_s2_mid1}, <Subject 1> punches the right arm straight up along a 45-degree upper-right diagonal while the left hand rests on the hip and the left heel kicks playfully back on the {t_s2_a1} and {t_s2_a2} musical beats. During {t_s2_mid1}–{t_s2_w1_end}, <Subject 1> snaps the right hand to the forehead-temple in a crisp idol salute (Chain A5), tilting the head right on the {t_s2_a3} beat and left on the {t_s2_a4} beat with a sweet natural smile.\n{t_s2_w1_end}–{t_s2_w2_end} (HERO ACTION CHAIN K47 / A9 — 360-Degree Spot Spin & Hem Flare): During {t_s2_w1_end}–{t_s2_spin_start}, <Subject 1> lowers the right hand from the salute and plants the left foot as a pivot. During {t_s2_spin_start}–{t_s2_spin_land}, <Subject 1> executes one brisk, cohesive 360-degree clockwise full spin in place on the ball of the left foot; at {t_s2_spin_apex}, <Subject 1> passes through the 180-degree back-view spin apex with hair and garment hem flaring outward symmetrically, and completes the second 180 degrees of rotation to land dead-on to the camera on the {t_s2_spin_land} musical accent with the exact facial identity, warm skin tone, and sweet smile of <Picture 1>.\n{t_s2_w2_end}–{t_s2_end} (CHAIN A4 + A16 — Finger-Heart to Final Pose Freeze): During {t_s2_w2_end}–{t_s2_freeze}, <Subject 1> brings both hands up to chest level to form a heart shape with thumbs and index fingers while dipping the knees once on the beat. During {t_s2_freeze}–{t_s2_end} (termination freeze), <Subject 1> slides both hands onto the hips, points one toe forward, tilts the head 15 degrees right with a sweet natural smile looking straight into the lens, and holds two full beats of stillness until the end of the shot.\n\noverall_soundscape:\nN/A — the reused <Audio 1> is the complete final audio track.\n\nnon_diegetic_music:\nN/A — <Audio 1> is directly reused 1:1 as the complete final audio track."
+    }
+  },
+  "41": {
+    "class_type": "BunnyH3ConditioningBridge",
+    "inputs": {
+      "conditioning": [
+        "40",
+        0
+      ],
+      "adapter": "BUNNY_H3_ActionLogic_Bridge_V2.safetensors",
+      "alpha": 0.22,
+      "magnitude_match": "per_token",
+      "enabled": true
+    }
+  },
+  "42": {
+    "class_type": "MiniMaxH3MotionContext",
+    "inputs": {
+      "conditioning": [
+        "41",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "latent": [
+        "40",
+        1
+      ],
+      "context_length": "22",
+      "audio_context_length": 18,
+      "context_latent": [
+        "27",
+        0
+      ]
+    }
+  },
+  "45": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 2026103102
+    }
+  },
+  "46": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "conditioning": [
+        "42",
+        0
+      ]
+    }
+  },
+  "47": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "45",
+        0
+      ],
+      "guider": [
+        "46",
+        0
+      ],
+      "sampler": [
+        "16",
+        0
+      ],
+      "sigmas": [
+        "15",
+        0
+      ],
+      "latent_image": [
+        "40",
+        1
+      ]
+    }
+  },
+  "48": {
+    "class_type": "MiniMaxH3JoinMatch",
+    "inputs": {
+      "samples": [
+        "47",
+        0
+      ],
+      "strength": 0.45,
+      "context_length": [
+        "42",
+        1
+      ],
+      "min_excess": 1.15,
+      "match_spread": true,
+      "min_excess_spread": 1.15,
+      "match_detail": false,
+      "min_excess_detail": 2.5,
+      "tuning": "manual",
+      "context_latent": [
+        "27",
+        0
+      ]
+    }
+  },
+  "50": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "48",
+        0
+      ]
+    }
+  },
+  "51": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "50",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ]
+    }
+  },
+  "52": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "50",
+        1
+      ],
+      "vae": [
+        "8",
+        0
+      ]
+    }
+  },
+  "53": {
+    "class_type": "MiniMaxH3MotionContextTrim",
+    "inputs": {
+      "images": [
+        "51",
+        0
+      ],
+      "audio": [
+        "52",
+        0
+      ],
+      "trim_frames": [
+        "42",
+        1
+      ],
+      "fps": 24.0,
+      "match_tail": true
+    }
+  },
+  "54": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "53",
+        0
+      ],
+      "audio": [
+        "53",
+        1
+      ],
+      "fps": 24.0
+    }
+  },
+  "55": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "54",
+        0
+      ],
+      "filename_prefix": "DouyinDance_Lumine_15s_V1_Seg02",
+      "format": "mp4",
+      "codec": "h264"
+    }
+  }
+}

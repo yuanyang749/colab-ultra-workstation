@@ -618,7 +618,7 @@
         0
       ],
       "latent_image": [
-        "663",
+        "60",
         1
       ]
     }
@@ -960,7 +960,7 @@
   "662": {
     "class_type": "MiniMaxH3AddGuide",
     "inputs": {
-      "conditioning": [
+      "positive": [
         "62",
         0
       ],
@@ -976,14 +976,13 @@
         "661",
         0
       ],
-      "frame_idx": 107,
-      "strength": 0.9
+      "frame_idx": 107
     }
   },
   "663": {
     "class_type": "MiniMaxH3AddGuide",
     "inputs": {
-      "conditioning": [
+      "positive": [
         "662",
         0
       ],
@@ -992,15 +991,14 @@
         0
       ],
       "latent": [
-        "662",
+        "60",
         1
       ],
       "image": [
         "661",
         0
       ],
-      "frame_idx": 136,
-      "strength": 0.95
+      "frame_idx": 136
     }
   },
   "901": {

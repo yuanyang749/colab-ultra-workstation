@@ -122,23 +122,44 @@ def detect_speech_window_and_pause(
         t_start = min(t_start, 0.90)
         t_end = max(t_end, min(duration - 0.25, 4.10))
 
-    if "，" in text:
-        parts = [p.strip() for p in text.split("，", 1) if p.strip()]
-        if len(parts) == 2:
-            char_ratio = len(parts[0]) / max(1, len(parts[0]) + len(parts[1]))
-            expected_split = t_start + (t_end - t_start) * char_ratio
-            search_lo = max(t_start + 0.55, expected_split - 0.55)
-            search_hi = min(t_end - 0.55, expected_split + 0.55)
+    import re
+    raw_clauses = [p.strip() for p in re.split(r"(?<=[？])|，", text) if p.strip()]
+    # Merge short vocative prefix (e.g. "周董") or trailing punctuation (e.g. "！") with the adjacent clause
+    clauses: List[str] = []
+    for c in raw_clauses:
+        if clauses and all(ch in "！？。，…!?,." for ch in c):
+            clauses[-1] = f"{clauses[-1]}{c}"
+        elif clauses and len(clauses[-1]) <= 3 and not clauses[-1].endswith("？"):
+            clauses[-1] = f"{clauses[-1]}，{c}"
+        else:
+            clauses.append(c)
+
+    if len(clauses) >= 2:
+        total_chars = max(1, sum(len(c) for c in clauses))
+        splits = [t_start]
+        acc_chars = 0
+        for c in clauses[:-1]:
+            acc_chars += len(c)
+            ratio = acc_chars / total_chars
+            expected_t = t_start + (t_end - t_start) * ratio
+            prev_t = splits[-1]
+            search_lo = max(prev_t + 0.45, expected_t - 0.50)
+            search_hi = min(t_end - 0.50, expected_t + 0.50)
             cand_idx = [i for i, t in enumerate(times) if search_lo <= t <= search_hi]
             if cand_idx:
                 min_i = min(cand_idx, key=lambda i: rms_smooth[i])
-                t_split = times[min_i]
+                t_sp = times[min_i]
             else:
-                t_split = expected_split
-            return [
-                (round(t_start, 2), round(max(t_start + 0.4, t_split - 0.04), 2), parts[0]),
-                (round(t_split + 0.04, 2), round(t_end, 2), parts[1]),
-            ]
+                t_sp = expected_t
+            splits.append(t_sp)
+        splits.append(t_end)
+
+        out_cues: List[Tuple[float, float, str]] = []
+        for idx_c, c_txt in enumerate(clauses):
+            cs = splits[idx_c] + (0.04 if idx_c > 0 else 0.0)
+            ce = splits[idx_c + 1] - (0.04 if idx_c < len(clauses) - 1 else 0.0)
+            out_cues.append((round(cs, 2), round(max(cs + 0.35, ce), 2), c_txt))
+        return out_cues
 
     return [(round(t_start, 2), round(t_end, 2), text)]
 
@@ -170,6 +191,8 @@ def load_cjk_font(font_size: int) -> ImageFont.FreeTypeFont:
 
 def render_subtitle_overlay_png(text: str, width: int, height: int, out_png: Path) -> None:
     scale = 2
+    res_scale = width / 1344.0
+    s = scale * res_scale
     W, H = width * scale, height * scale
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -184,14 +207,14 @@ def render_subtitle_overlay_png(text: str, width: int, height: int, out_png: Pat
     x = (W - tw) // 2
     y = int(H * 0.885) - th // 2
 
-    pad_x, pad_y = int(22 * scale), int(10 * scale)
+    pad_x, pad_y = int(round(22 * s)), int(round(10 * s))
     draw.rounded_rectangle(
-        [x - pad_x, y - pad_y, x + tw + pad_x, y + th + pad_y + int(4 * scale)],
-        radius=int(10 * scale),
+        [x - pad_x, y - pad_y, x + tw + pad_x, y + th + pad_y + int(round(4 * s))],
+        radius=int(round(10 * s)),
         fill=(10, 14, 20, 125),
     )
 
-    stroke_w = int(2.5 * scale)
+    stroke_w = max(1, int(round(2.5 * s)))
     draw.text(
         (x, y),
         text,
@@ -214,41 +237,43 @@ def render_character_intro_overlay_png(
 ) -> None:
     """Render cinema-grade character introduction badge (Lower-Third / Side Callout) in Segment 1."""
     scale = 2
+    res_scale = width / 1344.0
+    s = scale * res_scale
     W, H = width * scale, height * scale
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    font_name = load_cjk_font(int(27 * scale))
-    font_en = load_cjk_font(int(12 * scale))
-    font_role = load_cjk_font(int(15 * scale))
+    font_name = load_cjk_font(int(round(27 * s)))
+    font_en = load_cjk_font(int(round(12 * s)))
+    font_role = load_cjk_font(int(round(15 * s)))
 
     align_right = side == "right"
-    x = int(760 * scale) if align_right else int(46 * scale)
-    y = int(180 * scale) if align_right else int(536 * scale)
+    x = int(round(760 * s)) if align_right else int(round(46 * s))
+    y = int(round(180 * s)) if align_right else int(round(536 * s))
 
-    card_w = int(268 * scale)
-    card_h = int(84 * scale)
+    card_w = int(round(268 * s))
+    card_h = int(round(84 * s))
     draw.rounded_rectangle(
         [x, y, x + card_w, y + card_h],
-        radius=int(8 * scale),
+        radius=int(round(8 * s)),
         fill=(12, 16, 22, 178),
         outline=(255, 255, 255, 45),
-        width=max(1, scale // 2),
+        width=max(1, int(round(s / 2))),
     )
-    bar_w = int(4 * scale)
+    bar_w = int(round(4 * s))
     if not align_right:
         draw.rounded_rectangle(
-            [x, y + int(10 * scale), x + bar_w, y + card_h - int(10 * scale)],
-            radius=int(2 * scale),
+            [x, y + int(round(10 * s)), x + bar_w, y + card_h - int(round(10 * s))],
+            radius=int(round(2 * s)),
             fill=(218, 165, 68, 255),
         )
     else:
         draw.rounded_rectangle(
-            [x + card_w - bar_w, y + int(10 * scale), x + card_w, y + card_h - int(10 * scale)],
-            radius=int(2 * scale),
+            [x + card_w - bar_w, y + int(round(10 * s)), x + card_w, y + card_h - int(round(10 * s))],
+            radius=int(round(2 * s)),
             fill=(96, 165, 250, 255),
         )
-    tx = x + int(16 * scale)
+    tx = x + int(round(16 * s))
 
     name_zh = card_info.get("name_zh", "")
     name_en = card_info.get("name_en", "")
@@ -256,29 +281,29 @@ def render_character_intro_overlay_png(
     role_line2 = card_info.get("title_line2", "")
 
     draw.text(
-        (tx, y + int(10 * scale)),
+        (tx, y + int(round(10 * s))),
         name_zh,
         font=font_name,
         fill=(250, 250, 248, 255),
-        stroke_width=scale,
+        stroke_width=max(1, int(round(s))),
         stroke_fill=(0, 0, 0, 180),
     )
-    nb = draw.textbbox((tx, y + int(10 * scale)), name_zh, font=font_name)
+    nb = draw.textbbox((tx, y + int(round(10 * s))), name_zh, font=font_name)
     draw.text(
-        (nb[2] + int(10 * scale), y + int(21 * scale)),
+        (nb[2] + int(round(10 * s)), y + int(round(21 * s))),
         name_en,
         font=font_en,
         fill=(190, 200, 215, 220),
     )
     draw.text(
-        (tx, y + int(45 * scale)),
+        (tx, y + int(round(45 * s))),
         role_line1,
         font=font_role,
         fill=(228, 232, 238, 245),
     )
     if role_line2:
         draw.text(
-            (tx, y + int(63 * scale)),
+            (tx, y + int(round(63 * s))),
             role_line2,
             font=font_en,
             fill=(165, 175, 190, 215),
@@ -308,14 +333,21 @@ def build_subtitles_for_segments(
     enable_cards: bool = True,
     left_card: Dict[str, str] = DEFAULT_CARDS["role1"],
     right_card: Dict[str, str] = DEFAULT_CARDS["role2"],
+    role3_card: Optional[Dict[str, str]] = None,
+    role3_intro_seg: int = 5,
+    target_width: int = 1344,
+    target_height: int = 768,
+    cas_strength: float = 0.0,
 ) -> List[Tuple[float, float, str, str]]:
     cues: List[Tuple[float, float, str, str]] = []
+    seg_offsets: List[float] = []
     offset = 0.0
 
     for idx, seg_path in enumerate(seg_paths):
+        seg_offsets.append(offset)
         speaker, line = script_lines[idx] if idx < len(script_lines) else (f"Seg{idx+1}", "")
         audio, dur = load_wav_mono(seg_path)
-        min_s = 0.45 if idx == 0 else 1.02
+        min_s = 0.45 if idx in (0, 4, 5, 7) else 1.02
         sub_cues = detect_speech_window_and_pause(audio, 16000, dur, line, min_start=min_s)
         for st, et, txt in sub_cues:
             cues.append((offset + st, offset + et, speaker, txt))
@@ -331,13 +363,20 @@ def build_subtitles_for_segments(
         inputs = ["-i", str(master_video)]
         filter_parts = []
         last_v = "[0:v]"
+        if target_width != 1344 or target_height != 768 or cas_strength > 0.0:
+            vf_chain = f"scale={target_width}:{target_height}:flags=lanczos"
+            if cas_strength > 0.0:
+                vf_chain += f",cas=strength={cas_strength:.2f}"
+            filter_parts.append(f"[0:v]{vf_chain}[v_base]")
+            last_v = "[v_base]"
         in_idx = 1
+        slide_px = int(round(18 * (target_width / 1344.0)))
 
         if enable_cards:
             intro_lw_png = tmp_dir / "intro_left.png"
             intro_cm_png = tmp_dir / "intro_right.png"
-            render_character_intro_overlay_png(1344, 768, intro_lw_png, left_card, side="left")
-            render_character_intro_overlay_png(1344, 768, intro_cm_png, right_card, side="right")
+            render_character_intro_overlay_png(target_width, target_height, intro_lw_png, left_card, side="left")
+            render_character_intro_overlay_png(target_width, target_height, intro_cm_png, right_card, side="right")
 
             inputs.extend(["-loop", "1", "-t", "5.0", "-i", str(intro_lw_png), "-loop", "1", "-t", "5.0", "-i", str(intro_cm_png)])
             lw_idx = in_idx
@@ -347,19 +386,36 @@ def build_subtitles_for_segments(
 
             filter_parts.append(
                 f"[{lw_idx}:v]format=rgba,fade=t=in:st=0.40:d=0.38:alpha=1,fade=t=out:st=3.97:d=0.38:alpha=1[lw_a];"
-                f"{last_v}[lw_a]overlay=x='if(lt(t,0.78),-18*(1-(t-0.40)/0.38),0)':y=0:enable='between(t,0.40,4.35)'[v_lw]"
+                f"{last_v}[lw_a]overlay=x='if(lt(t,0.78),-{slide_px}*(1-(t-0.40)/0.38),0)':y=0:enable='between(t,0.40,4.35)'[v_lw]"
             )
             last_v = "[v_lw]"
 
             filter_parts.append(
                 f"[{cm_idx}:v]format=rgba,fade=t=in:st=0.85:d=0.38:alpha=1,fade=t=out:st=4.07:d=0.38:alpha=1[cm_a];"
-                f"{last_v}[cm_a]overlay=x='if(lt(t,1.23),18*(1-(t-0.85)/0.38),0)':y=0:enable='between(t,0.85,4.45)'[v_cm]"
+                f"{last_v}[cm_a]overlay=x='if(lt(t,1.23),{slide_px}*(1-(t-0.85)/0.38),0)':y=0:enable='between(t,0.85,4.45)'[v_cm]"
             )
             last_v = "[v_cm]"
 
+            if role3_card and role3_intro_seg <= len(seg_offsets):
+                r3_off = seg_offsets[role3_intro_seg - 1]
+                r3_in = round(r3_off + 0.40, 2)
+                r3_slide_end = round(r3_in + 0.38, 2)
+                r3_out_st = round(r3_off + 4.10, 2)
+                r3_end = round(r3_out_st + 0.38, 2)
+                intro_r3_png = tmp_dir / "intro_role3.png"
+                render_character_intro_overlay_png(target_width, target_height, intro_r3_png, role3_card, side="left")
+                inputs.extend(["-loop", "1", "-t", f"{r3_end + 0.5:.2f}", "-i", str(intro_r3_png)])
+                r3_idx = in_idx
+                in_idx += 1
+                filter_parts.append(
+                    f"[{r3_idx}:v]format=rgba,fade=t=in:st={r3_in:.2f}:d=0.38:alpha=1,fade=t=out:st={r3_out_st:.2f}:d=0.38:alpha=1[r3_a];"
+                    f"{last_v}[r3_a]overlay=x='if(lt(t,{r3_slide_end:.2f}),-{slide_px}*(1-(t-{r3_in:.2f})/0.38),0)':y=0:enable='between(t,{r3_in:.2f},{r3_end:.2f})'[v_r3]"
+                )
+                last_v = "[v_r3]"
+
         for i, (st, et, _spk, txt) in enumerate(cues):
             png_path = tmp_dir / f"sub_{i:02d}.png"
-            render_subtitle_overlay_png(txt, 1344, 768, png_path)
+            render_subtitle_overlay_png(txt, target_width, target_height, png_path)
             inputs.extend(["-loop", "1", "-t", f"{et + 0.5:.2f}", "-i", str(png_path)])
             sub_a = f"[sa{in_idx}]"
             out_v = f"[v{in_idx}]"
@@ -373,13 +429,14 @@ def build_subtitles_for_segments(
             in_idx += 1
 
         filter_complex = ";".join(filter_parts)
+        crf_val = "14" if target_width > 1344 else "15"
         cmd = [
             "ffmpeg", "-y",
             *inputs,
             "-filter_complex", filter_complex,
             "-map", last_v,
             "-map", "0:a",
-            "-c:v", "libx264", "-crf", "15", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", "-crf", crf_val, "-preset", "slow", "-pix_fmt", "yuv420p",
             "-c:a", "copy",
             str(out_video),
         ]
@@ -404,6 +461,8 @@ if __name__ == "__main__":
     parser.add_argument("--left-card", default=None, help="Left character card: '姓名|英文或年龄|头衔1|头衔2'")
     parser.add_argument("--right-card", default=None, help="Right character card: '姓名|英文或年龄|头衔1|头衔2'")
     parser.add_argument("--no-cards", action="store_true", help="Disable Segment 1 character introduction cards")
+    parser.add_argument("--upscale-2k", action="store_true", help="Upscale to 2K (2688x1536) with Lanczos + CAS and native 2K vector overlays")
+    parser.add_argument("--cas-strength", type=float, default=0.45, help="CAS contrast adaptive sharpening strength when --upscale-2k is enabled")
     args = parser.parse_args()
 
     cfg = {}
@@ -413,16 +472,28 @@ if __name__ == "__main__":
     root = Path(args.root)
     seg_prefix = args.seg_prefix or cfg.get("project_prefix") or "OfficeDuel_V9_Final"
     master_name = args.master or cfg.get("output_mp4") or f"{seg_prefix}_Master.mp4"
-    out_name = args.out or master_name.replace(".mp4", "_Subtitled.mp4")
+    default_suffix = "_2K_Subtitled.mp4" if args.upscale_2k else "_Subtitled.mp4"
+    out_name = args.out or master_name.replace(".mp4", default_suffix)
     srt_name = args.srt or master_name.replace(".mp4", ".srt")
 
     chars = cfg.get("characters", {})
-    left_card = copy_card = dict(DEFAULT_CARDS["role1"])
+    left_card = dict(DEFAULT_CARDS["role1"])
     right_card = dict(DEFAULT_CARDS["role2"])
+    role3_card = None
+    role3_intro_seg = 5
     if "role1" in chars:
         left_card.update({k: v for k, v in chars["role1"].items() if k in left_card})
     if "role2" in chars:
         right_card.update({k: v for k, v in chars["role2"].items() if k in right_card})
+    if "role3" in chars:
+        r3 = chars["role3"]
+        role3_card = {
+            "name_zh": r3.get("name_zh", "周 振 邦"),
+            "name_en": r3.get("name_en", "ZHOU ZHENBANG · 58岁"),
+            "title_line1": r3.get("title_line1", ""),
+            "title_line2": r3.get("title_line2", ""),
+        }
+        role3_intro_seg = int(r3.get("intro_seg", 5))
     if args.left_card:
         left_card = parse_card_arg(args.left_card, left_card)
     if args.right_card:
@@ -441,7 +512,11 @@ if __name__ == "__main__":
         raw_parts = [p.strip() for p in args.lines.split("|") if p.strip()]
         script_lines = [(f"Seg{i+1}", ln) for i, ln in enumerate(raw_parts)]
 
-    segs = [root / f"{seg_prefix}_Seg0{i}.mp4" for i in range(1, len(script_lines) + 1)]
+    target_w = 2688 if args.upscale_2k else 1344
+    target_h = 1536 if args.upscale_2k else 768
+    cas_str = args.cas_strength if args.upscale_2k else 0.0
+
+    segs = [root / f"{seg_prefix}_Seg{i:02d}.mp4" for i in range(1, len(script_lines) + 1)]
     cues = build_subtitles_for_segments(
         segs,
         root / master_name,
@@ -451,7 +526,12 @@ if __name__ == "__main__":
         enable_cards=enable_cards,
         left_card=left_card,
         right_card=right_card,
+        role3_card=role3_card,
+        role3_intro_seg=role3_intro_seg,
+        target_width=target_w,
+        target_height=target_h,
+        cas_strength=cas_str,
     )
-    print(f"✅ 自动声学对齐字幕生成完成: {root / out_name} & {root / srt_name}")
+    print(f"✅ 自动声学对齐字幕生成完成 ({target_w}x{target_h}): {root / out_name} & {root / srt_name}")
     for st, et, spk, txt in cues:
         print(f"  [{st:05.2f}s -> {et:05.2f}s] ({spk}) {txt}")

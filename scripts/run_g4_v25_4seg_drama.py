@@ -224,7 +224,31 @@ def apply_config_and_cli_overrides(wf: dict, args) -> str:
                     count=1,
                 )
 
-        # TailLock injection (only if requested AND image file exists)
+        # Optional: disable MotionContext/JoinMatch for clean camera cuts (e.g. close-up cut in Seg 3 or prop cut in Seg 4)
+        if scfg.get("use_motion_context") is False and seg_id > 1:
+            ctx_nid = meta["ctx"]
+            jm_nid = meta["out_lat"]
+            guider_nid = meta["guider"]
+            sampler_nid = meta["sampler"]
+            sep_nid = str(seg_id * 20 + 10)   # "50", "70", "90"
+            trim_nid = str(seg_id * 20 + 13)  # "53", "73", "93"
+            if r2v_nid in wf:
+                wf[r2v_nid]["inputs"]["length"] = int(scfg.get("length", 124))
+            if guider_nid in wf:
+                wf[guider_nid]["inputs"]["conditioning"] = [meta["bunny"], 0]
+            if sep_nid in wf:
+                wf[sep_nid]["inputs"]["av_latent"] = [sampler_nid, 0]
+            if trim_nid in wf:
+                wf[trim_nid]["inputs"]["trim_frames"] = 0
+            if ctx_nid:
+                wf.pop(ctx_nid, None)
+            if jm_nid and jm_nid != sampler_nid:
+                wf.pop(jm_nid, None)
+            meta["ctx"] = None
+            meta["out_lat"] = sampler_nid
+            print(f"🎬 第 {seg_id} 段已设为独立切镜模式 (use_motion_context=False, length={wf[r2v_nid]['inputs']['length']})", flush=True)
+
+        # TailLock / Keyframe Guide injection (only if requested AND image file exists)
         t_img = None
         t_frames = scfg.get("tail_lock_frames", [107, 136])
         t_strengths = scfg.get("tail_lock_strengths", [0.90, 0.95])
@@ -373,12 +397,14 @@ def stitch_available_segments(prefix: str, out_mp4_name: str, expected_segs: Lis
 def patch_bypass_bunny_if_needed(wf: dict, obj_info: dict) -> None:
     if "BunnyH3ConditioningBridge" not in obj_info:
         print("⚠️ BunnyH3ConditioningBridge 未注册，自动旁路直连 conditioning", flush=True)
-        wf["26"]["inputs"]["conditioning"] = ["20", 0]
-        wf["42"]["inputs"]["conditioning"] = ["40", 0]
-        wf["62"]["inputs"]["conditioning"] = ["60", 0]
-        wf["82"]["inputs"]["conditioning"] = ["80", 0]
-        for nid in ("21", "41", "61", "81"):
-            wf.pop(nid, None)
+        bunny_to_r2v = {"21": "20", "41": "40", "61": "60", "81": "80"}
+        for nid, node in wf.items():
+            inputs = node.get("inputs", {})
+            for k, v in list(inputs.items()):
+                if isinstance(v, list) and len(v) == 2 and str(v[0]) in bunny_to_r2v:
+                    inputs[k] = [bunny_to_r2v[str(v[0])], v[1]]
+        for b_nid in bunny_to_r2v:
+            wf.pop(b_nid, None)
 
 
 def inject_latent_checkpoints_and_slice(
@@ -389,33 +415,43 @@ def inject_latent_checkpoints_and_slice(
     end_seg: int = 4,
 ) -> None:
     """Attach H3SaveAVLatent checkpoints (~5MB each on Drive) and optionally slice graph to run only [start_seg..end_seg]."""
+    for old_save in ("901", "902", "903", "904"):
+        wf.pop(old_save, None)
     seg_latent_nodes = {s: m["out_lat"] for s, m in SEG_META.items()}
-    seg_node_ranges = {s: list(m["range"]) + [600 + s * 20 + i for i in range(1, 5)] for s, m in SEG_META.items()}
+    seg_node_ranges = {s: list(m["range"]) + [600 + s * 20 + i for i in range(1, 10)] for s, m in SEG_META.items()}
     latent_dir = DRIVE_COMFY / "output" / "latents"
     latent_dir.mkdir(parents=True, exist_ok=True)
 
     has_ckpt_nodes = "H3SaveAVLatent" in obj_info and "H3LoadAVLatent" in obj_info
-    if not has_ckpt_nodes:
-        print("⚠️ H3SaveAVLatent/H3LoadAVLatent 未注册，执行完整四段图。", flush=True)
-        return
-
-    for s in range(start_seg, end_seg + 1):
-        lat_nid = seg_latent_nodes[s]
-        if lat_nid in wf:
-            save_nid = f"90{s}"
-            wf[save_nid] = {
-                "class_type": "H3SaveAVLatent",
-                "inputs": {
-                    "latent": [lat_nid, 0],
-                    "checkpoint_name": f"{prefix}_Seg0{s}_av_latent.pt",
-                },
-            }
+    if has_ckpt_nodes:
+        for s in range(start_seg, end_seg + 1):
+            lat_nid = seg_latent_nodes[s]
+            if lat_nid in wf:
+                save_nid = f"90{s}"
+                wf[save_nid] = {
+                    "class_type": "H3SaveAVLatent",
+                    "inputs": {
+                        "latent": [lat_nid, 0],
+                        "checkpoint_name": f"{prefix}_Seg0{s}_av_latent.pt",
+                    },
+                }
+    else:
+        print("⚠️ H3SaveAVLatent/H3LoadAVLatent 未注册，跳过潜变量断点落盘。", flush=True)
 
     if start_seg > 1:
+        needs_prev_latent = SEG_META[start_seg]["ctx"] is not None
         prev_s = start_seg - 1
         ckpt_name = f"{prefix}_Seg0{prev_s}_av_latent.pt"
         ckpt_path = latent_dir / ckpt_name
-        if ckpt_path.exists():
+        if not needs_prev_latent:
+            print(f"⚡ 第 {start_seg} 段为独立切镜模式 (无上游潜空间依赖)，直接剥离前 {prev_s} 段独立极速渲染！", flush=True)
+            for s_drop in range(1, start_seg):
+                for nid_int in seg_node_ranges[s_drop]:
+                    if nid_int in (22, 23, 24):
+                        continue
+                    wf.pop(str(nid_int), None)
+                wf.pop(f"90{s_drop}", None)
+        elif has_ckpt_nodes and ckpt_path.exists():
             print(f"⚡ 命中云盘潜变量断点存档: {ckpt_path}，自动跳过前 {prev_s} 段 (耗时 0.05s)！", flush=True)
             for s_drop in range(1, start_seg):
                 for nid_int in seg_node_ranges[s_drop]:

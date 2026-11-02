@@ -1,0 +1,109 @@
+{
+  "project_prefix": "DouyinDance_RealGirlV3_15s_V15_Best",
+  "output_mp4": "DouyinDance_RealGirlV3_15s_V15_Best.mp4",
+  "output_subdir": "20261031_DouyinDance_CatGirl_15s/V15_Best",
+  "expected_segs": [
+    1,
+    2
+  ],
+  "width": 768,
+  "height": 1344,
+  "fps": 24,
+  "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+  "turbo_lora_name": "minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors",
+  "style_mode": "photorealistic",
+  "realism_lora_strength": 0.6,
+  "closeup_lora_strength": 0.2,
+  "bunny_alpha": 0.22,
+  "master_bgm_wav": "master_bgm_15s.wav",
+  "characters": {
+    "dancer": {
+      "name": "iPhone原生实拍白袜少女 (RealGirl V3)",
+      "image_seg1": "ref_realgirl_v3_2k.png",
+      "image_seg2": "ref_realgirl_v3_2k.png"
+    }
+  },
+  "segments": [
+    {
+      "seg_id": 1,
+      "length": 192,
+      "seed": 2026110111,
+      "audio_wav": "seg01_bgm_8s.wav",
+      "ref_images_custom": [
+        "ref_realgirl_v3_2k.png",
+        "ref_realgirl_v3_closeup_9x16.png"
+      ],
+      "guide_keyframes": [
+        {
+          "image": "ref_realgirl_v3_2k.png",
+          "frame_idx": 0
+        }
+      ],
+      "prompt": "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced for full-body framing, and <Picture 2> is referenced for medium close-up framing.\n\nsubject_definitions:\n<Subject 1> is the exact same young East Asian female dancer shown in <Picture 1> and <Picture 2>. <Picture 1> and <Picture 2> are the sole and absolute visual authority for her photorealistic facial identity, natural dark brown wavy long hair, subtle silver pendant necklace, body proportions, cream ribbed V-neck button cardigan, charcoal-grey pleated mini skirt, white ribbed cotton crew socks (no shoes), and the real modern apartment living room with grey sofa, marble coffee table, wooden TV cabinet, and oak hardwood floor — nothing about her appearance or background is redefined in words.\n<Audio 1> is the exact upbeat 125 BPM dance pop audio track for this 8.0-second segment (beat = 0.48s).\n\nsummary:\n[reference generation + audio reuse] Segment 01 of an unbroken 15.08-second vertical 9:16 raw iPhone live-action Douyin idol dance performance (0.000s–8.000s). <Subject 1> awakens from the opening pose of <Picture 1>, waves a polite greeting, pokes her index finger toward the lens while the camera synchronously pushes in to the medium close-up of <Picture 2>, gives a cute shy giggle with a wink, and grooves into rhythmic hip-sway hand waves and alternating chest-level fist pumps as the camera pulls back to full body.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - Preserve exact raw iPhone photorealistic facial identity, natural skin texture, cream ribbed V-neck cardigan, charcoal-grey pleated mini skirt, white cotton crew socks, and apartment living room environment from <Picture 1> and <Picture 2>. Single solo dancer only; no extra people.\n<Audio 1>: fully_copy - Reused 1:1 as the complete final audio track; synchronize every dance bounce, accent, to <Audio 1>.\n\ndetailed_description:\nr34l1sm, Facial Realism, raw unedited iPhone vertical 9:16 live-action smartphone dance video, natural diffused indoor window lighting, crisp 1/200s shutter motion clarity, authentic human skin texture, fine ribbed knit cardigan micro-texture, realistic skirt and hair physics.\n[Shot 1] SUSTAINED LAYER (continuous throughout 00:00.000–00:08.000): <Subject 1> maintains an elastic knee-bounce groove on every 0.48-second beat (Chain A1 + B1 engine), weight rebounding lightly between the balls of both feet in her white cotton socks while her charcoal-grey pleated mini skirt sways with each hip shift.\n00:00.000–00:01.220 (CHAIN A12 to K44 — Greeting Awakening): Starting from the exact opening pose of <Picture 1> (standing centered in full-body framing with hands clasped behind her back and knees slightly turned inward), at 00:00.720 <Subject 1> rebounds softly through her knees, brings her right hand out from behind her back to chest-shoulder height, and waves her open palm warmly at the camera while tilting her head 10 degrees right on the 00:01.220 beat with a sweet natural smile. Camera holds a stable full-body vertical frame.\n00:01.220–00:03.120 (CHAIN A11 + K8 — Camera Poke & Giggle with 1:1 Synced Push-Pull): During 00:01.220–00:02.040, <Subject 1> places her left hand on her hip and extends her right index finger straight forward toward the lens in a playful fourth-wall poke landing on the 00:02.040 beat; SYNCHRONIZED 1:1 WITH HER ARM EXTENSION during 00:01.220–00:02.040, the physical camera smoothly pushes in from full-body (<Picture 1>) to the intimate medium close-up (<Picture 2>), arriving at peak close-up framing at the exact 00:02.040 finger-poke apex. During 00:02.040–00:02.640, holding the medium close-up, <Subject 1> curls her right hand daintily near her chin (without blocking her face) in a cute shy giggle while winking her left eye. During 00:02.640–00:03.120, as <Subject 1> opens both arms gracefully downward to her sides, the camera synchronously pulls back smoothly to the full-body vertical framing by 00:03.120.\n00:03.120–00:06.000 (CHAIN B10 + B7 — Hip-Pop Pendulum Groove & Lip-Sync): In full-body framing, <Subject 1> maintains her exact sweet closed-lip smile from <Picture 1> without exaggerated mouth opening. During 00:03.120–00:04.560, she pops her right hip out on the 00:03.620 beat while sweeping both forearms diagonally right at mid-torso, then mirrors a crisp left hip pop on the 00:04.560 beat while sweeping both hands left as her charcoal-grey pleated mini skirt flares side to side. During 00:04.560–00:06.000, she executes two inward wrist rolls in front of her chest (Chain B12) and flips both palms upward in an inviting gesture on the 00:05.520 beat.\n00:06.000–00:08.000 (CHAIN A3 — Alternating Bouncy Chest Punches & Transition Hook): During 00:06.000–00:07.480, <Subject 1> pumps small energetic alternating fists forward at chest level on the 00:06.000, 00:06.440, 00:06.960, and 00:07.480 beats while her knees knock inward rhythmically. During 00:07.480–00:08.000 (exit state hook), she gathers both hands together at her chest on the 00:07.920 beat with her weight loaded onto her left foot, ready to launch into the next phrase.\n\noverall_soundscape:\nN/A — the reused <Audio 1> is the complete final audio track.\n\nnon_diegetic_music:\nN/A — <Audio 1> is directly reused 1:1 as the complete final audio track."
+    },
+    {
+      "seg_id": 2,
+      "length": 192,
+      "seed": 2026110112,
+      "audio_wav": "seg02_bgm_8s.wav",
+      "ref_images_custom": [
+        "ref_realgirl_v3_2k.png",
+        "ref_realgirl_v3_closeup_9x16.png"
+      ],
+      "prompt": "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) and <Picture 2> are fully referenced for identity, warm natural skin tone, outfit, and environment, with the 180-degree back-of-head spinning skirt-flare apex at frame 122 (05.083s) and the frontal post-spin landing stance at frame 138 (05.750s).\n\nsubject_definitions:\n<Subject 1> is the exact same young East Asian female dancer shown in <Picture 1> and <Picture 2>, preserving 100% of her exact raw iPhone photorealistic facial identity, warm natural peach-beige skin tone (NEVER pale or chalk-white), natural dark brown wavy long hair with soft face-framing bangs, subtle silver pendant necklace, cream ribbed V-neck button cardigan, charcoal-grey pleated mini skirt, white ribbed cotton crew socks (no shoes), and the real modern apartment living room with grey sofa, marble coffee table, wooden TV cabinet, and oak hardwood floor.\n<Audio 1> is the exact upbeat 125 BPM dance pop audio track for Segment 02 (beat = 0.48s).\n\nsummary:\n[reference generation + audio reuse] Seamlessly continuing the unbroken 15.08-second vertical 9:16 raw iPhone Douyin idol dance long take from Segment 01, <Subject 1> transitions from her chest-level hand gather into diagonal overhead arm reaches with heel-kick skips, snaps a cute forehead salute, executes a brisk 360-degree clockwise spot spin passing through the 180-degree back-view skirt-flare apex at 05.083s (frame 122) and landing directly into her exact warm-toned frontal face and poised stance at 05.750s (frame 138), and finishes with a chest-level finger-heart and hands-on-hips head-tilt pose.\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - Strictly preserve 100% of the exact facial identity, warm natural peach-beige skin tone (zero pale/white face flash during or after the spin), face-framing bangs, outfit, and apartment living room environment from <Picture 1> and <Picture 2>. Do NOT reset to a static pose at 0.000s; continue seamlessly from the incoming motion context.\n<Audio 1>: fully_copy - Reused 1:1 as the complete final audio track.\n\ndetailed_description:\nr34l1sm, Facial Realism, raw unedited iPhone vertical 9:16 live-action smartphone dance video, consistent warm natural indoor skin tone (no whiteout or pale skin shift during spin), crisp 1/200s shutter motion clarity, authentic human skin texture, fine ribbed knit cardigan micro-texture, realistic centrifugal skirt and hair physics.\n[Shot 1] SUSTAINED LAYER (continuous through 00:00.000–00:07.040): <Subject 1> maintains the elastic 125 BPM knee-bounce groove on the balls of her feet, keeping her full head and full body from white cotton socks to hair crown clearly inside the vertical frame, with unchanging warm natural skin tone throughout.\n00:00.000–00:00.917 (Seamless Motion Bridge): Holding the exact incoming full-body framing and chest-level hand gather from the end of the previous clip, <Subject 1> completes her soft knee rebound with weight on her left foot.\n00:00.917–00:03.760 (CHAIN K45 + A5 — Diagonal Overhead Reach & Cute Salute): During 00:00.917–00:02.360, <Subject 1> punches her right arm straight up along a 45-degree upper-right diagonal while her left hand rests on her hip and her left heel in her white cotton sock kicks playfully back toward her hip on the 00:01.300 and 00:01.780 beats, her charcoal-grey pleated mini skirt bouncing briskly. During 00:02.360–00:03.760, she snaps her right hand to her forehead-temple in a crisp idol salute (Chain A5), tilting her head right on the 00:02.760 beat and left on the 00:03.220 beat with a sweet natural smile.\n00:03.760–00:06.000 (HERO ACTION CHAIN K47 / A9 — Two-Phase 360-Degree Spot Spin & Skirt Flare): During 00:03.760–00:04.350, <Subject 1> lowers her right hand from the salute and plants her left foot as a pivot. During 00:04.350–00:05.750, she executes one brisk, cohesive 360-degree clockwise full spin in place on the ball of her left foot; at 00:05.083 (frame 122), she passes through the 180-degree back-view spin apex with her dark brown wavy hair and charcoal-grey pleated mini skirt flaring out symmetrically in a bell shape, and during 00:05.083–00:05.750 she completes the second 180 degrees of rotation, landing dead-on to the camera at 00:05.750 (frame 138) with her exact warm natural peach-beige skin tone, face-framing bangs, and sweet smile!\n00:06.000–00:08.000 (CHAIN A4 + A16 — Finger-Heart to Final Pose Freeze): During 00:06.000–00:07.040, <Subject 1> brings both hands up to chest level to form a cute heart shape with her thumbs and index fingers while dipping her knees once. During 00:07.040–00:08.000 (termination freeze), she slides both hands onto her hips, points her right toe forward across her left foot in her white cotton socks, tilts her head 15 degrees right with a sweet natural smile looking straight into the lens, and holds steady until the end of the shot.\n\noverall_soundscape:\nN/A — the reused <Audio 1> is the complete final audio track.\n\nnon_diegetic_music:\nN/A — <Audio 1> is directly reused 1:1 as the complete final audio track."
+    }
+  ],
+  "shift_video": 12.0,
+  "shift_audio": 1.2,
+  "sigmas_tail_strength": 0.7,
+  "join_match_strength": 0.45,
+  "join_match_min_excess": 1.15,
+  "join_match_spread": true,
+  "stage2_tessera_profiles": {
+    "default_profile": "g4_optimal",
+    "g4_optimal": {
+      "description": "G4 (96GB VRAM) Optimal Full-Frame 2K Refinement: 1x3 horizontal band tiles (1536x1088, zero vertical face seam), single unified model (zero CPU LoRA rebaking), refines all 3 tiles (~85s/seg, ~4 min total)",
+      "spatial_tile": "custom",
+      "tile_width": 1536,
+      "tile_height": 1088,
+      "segment_frames": 56,
+      "tile_select": "",
+      "tile_limit": 0,
+      "lms_lora_strength": 0.42,
+      "guide_release": 0.55
+    },
+    "g4_fast_face": {
+      "description": "G4 (96GB VRAM) Fast Upper-Body/Face 2K Refinement: 1536x1088 Tile 0 only (~28s/seg, ~1.5 min total)",
+      "spatial_tile": "custom",
+      "tile_width": 1536,
+      "tile_height": 1088,
+      "segment_frames": 56,
+      "tile_select": "0",
+      "tile_limit": 1,
+      "lms_lora_strength": 0.42,
+      "guide_release": 0.55
+    },
+    "local_32g": {
+      "description": "Pluggable Local 32GB GPU Profile (RTX 5090): 768x768 med_vram tile focused on upper body/face",
+      "spatial_tile": "med_vram",
+      "tile_width": 768,
+      "tile_height": 768,
+      "segment_frames": 28,
+      "tile_select": "0",
+      "tile_limit": 1,
+      "lms_lora_strength": 0.42,
+      "guide_release": 0.55
+    },
+    "local_24g": {
+      "description": "Pluggable Local 24GB GPU Profile (RTX 3090/4090): 640x640 low_vram tile focused on upper body/face",
+      "spatial_tile": "low_vram",
+      "tile_width": 640,
+      "tile_height": 640,
+      "segment_frames": 28,
+      "tile_select": "0",
+      "tile_limit": 1,
+      "lms_lora_strength": 0.42,
+      "guide_release": 0.55
+    }
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "title": "Open-Source AI Dance & Douyin/TikTok Choreography Music Catalog",
+  "version": "1.0.0",
+  "updated_at": "2026-11-01",
+  "repositories": [
+    {
+      "id": "finedance_hf",
+      "name": "FineDance (ICCV 2023) — HuggingFace MotionHub Mirror",
+      "paper_title": "FineDance: A Fine-grained Choreography Dataset for 3D Full Body Dance Generation",
+      "github_url": "https://github.com/li-ronghui/FineDance",
+      "project_page": "https://li-ronghui.github.io/FineDance/",
+      "huggingface_dataset_url": "https://huggingface.co/datasets/ZeyuLing/MotionHub",
+      "audio_slices_url": "https://huggingface.co/datasets/ZeyuLing/MotionHub/tree/main/finedance/audio_slices",
+      "annotations_json_url": "https://huggingface.co/datasets/ZeyuLing/MotionHub/resolve/main/annotations/music_dance/test.json",
+      "license_note": "Academic & Open Research Dataset (211 songs, 22 dance genres, 48kHz WAV slices)",
+      "lossless_reconstruction_trick": "Slices are 12.0s long with a 6.0s sliding window step (mean_abs_diff = 0.00 at shift=6.0s). Concatenating even slices (slice_0 + slice_2 + slice_4) reconstructs bit-exact 36.0s master WAV tracks."
+    },
+    {
+      "id": "aist_plusplus",
+      "name": "AIST++ & AIST Dance Video Database (Google & AIST Japan)",
+      "paper_title": "AI Choreographer: Music Conditioned 3D Dance Generation with AIST++ (ICCV 2021)",
+      "github_url": "https://github.com/google/aistplusplus_api",
+      "project_page": "https://google.github.io/aistplusplus_dataset/",
+      "official_audio_portal": "https://aistdancedb.ongaaccel.jp/database_download/",
+      "direct_mp3_template": "https://aistdancedb.ongaaccel.jp/v1.0.0/audio/mp3/{music_id}.mp3",
+      "huggingface_mirror_url": "https://huggingface.co/spaces/ZeyuLing/music-to-dance-aistpp-leaderboard/tree/main/cases/audio",
+      "huggingface_raw_wav_url": "https://huggingface.co/datasets/ZeyuLing/MotionHub/tree/main/aist/raw_music",
+      "license_note": "60 copyright-cleared original studio dance tracks across 10 street/pop dance genres (80–135 BPM)."
+    },
+    {
+      "id": "popdanceset",
+      "name": "PopDanceSet / POPDG (CVPR 2024 Popular & Youth Dance Dataset)",
+      "paper_title": "POPDG: Popular 3D Dance Generation with PopDanceSet (CVPR 2024)",
+      "github_url": "https://github.com/Luke-Luo1/POPDG",
+      "project_page": "https://luke-luo1.github.io/POPDG/",
+      "curated_bvid_list_url": "https://raw.githubusercontent.com/Luke-Luo1/POPDG/main/high_quality_dataset",
+      "license_note": "Curated trending pop/idol/ACG dance clips from Bilibili & Douyin."
+    },
+    {
+      "id": "musepose_mimicmotion",
+      "name": "Tencent MusePose & MimicMotion Official Demo Assets",
+      "musepose_github": "https://github.com/TMElyralab/MusePose",
+      "mimicmotion_github": "https://github.com/tencent/MimicMotion"
+    }
+  ],
+  "finedance_genres": {
+    "kpop": {
+      "label": "韩团女团风 / 甜酷抖音热舞 (Mix, Korean)",
+      "recommended_for": "女团卡点舞、甜妹比心、俏皮律动、转圈甩裙",
+      "song_ids": ["016", "019", "020", "149", "176", "182", "186", "197", "199", "211"]
+    },
+    "jazz": {
+      "label": "街头爵士 / 辣妹卡点舞 (Street Jazz)",
+      "recommended_for": "强重音摆胯、欧美/韩系辣妹爵士舞",
+      "song_ids": ["012", "130", "131", "181"]
+    },
+    "urban": {
+      "label": "都市流行编舞 (Urban / Choreography)",
+      "recommended_for": "抖音现代流行编舞、手势舞与全身律动",
+      "song_ids": ["017", "018", "129", "132"]
+    },
+    "hiphop": {
+      "label": "高能街舞律动 (Street Hip-Hop)",
+      "recommended_for": "酷飒街舞、Bounce 律动、大框架动作",
+      "song_ids": ["094", "097", "098", "099", "100", "102", "103", "164", "165", "169", "198"]
+    },
+    "popping": {
+      "label": "强鼓点震感卡点舞 (Street Popping)",
+      "recommended_for": "机械卡点、强电子节拍",
+      "song_ids": ["058", "064", "069", "087", "089", "091", "092", "157", "159", "160", "161"]
+    },
+    "guofeng": {
+      "label": "国风汉唐 / 敦煌古典舞 (Chinese Classical)",
+      "recommended_for": "古风汉服、折扇水袖、柔美转圈",
+      "song_ids": ["021", "028", "029", "035", "036", "041", "044", "048", "114"]
+    }
+  },
+  "aist_tracks": {
+    "Pop": {
+      "label": "流行热舞 (Pop Dance)",
+      "tracks": {
+        "mPO0": "~80 BPM",
+        "mPO1": "~90 BPM",
+        "mPO2": "~100 BPM",
+        "mPO3": "~110 BPM",
+        "mPO4": "~120 BPM (推荐黄金抖舞速度)",
+        "mPO5": "~130 BPM (高能快节奏)"
+      }
+    },
+    "Waack": {
+      "label": "甩手爵士舞 (Waacking — 手臂与转圈极多)",
+      "tracks": {
+        "mWA0": "~80 BPM",
+        "mWA1": "~90 BPM",
+        "mWA2": "~100 BPM",
+        "mWA3": "~110 BPM",
+        "mWA4": "~120 BPM (推荐黄金速度)",
+        "mWA5": "~130 BPM"
+      }
+    },
+    "StreetJazz": {
+      "label": "街头爵士 (Street Jazz)",
+      "tracks": {
+        "mJS0": "~80 BPM",
+        "mJS1": "~90 BPM",
+        "mJS2": "~100 BPM",
+        "mJS3": "~110 BPM",
+        "mJS4": "~120 BPM (推荐黄金速度)",
+        "mJS5": "~130 BPM"
+      }
+    },
+    "House": {
+      "label": "电子舞曲 (House Dance)",
+      "tracks": {
+        "mHO0": "~110 BPM",
+        "mHO1": "~115 BPM",
+        "mHO2": "~120 BPM",
+        "mHO3": "~125 BPM (推荐黄金电音速度)",
+        "mHO4": "~130 BPM",
+        "mHO5": "~135 BPM"
+      }
+    },
+    "LAHipHop": {
+      "label": "LA 都市街舞 (LA Style Hip-Hop)",
+      "tracks": {
+        "mLH0": "~80 BPM",
+        "mLH1": "~90 BPM",
+        "mLH2": "~100 BPM",
+        "mLH3": "~110 BPM",
+        "mLH4": "~120 BPM",
+        "mLH5": "~130 BPM"
+      }
+    }
+  },
+  "popdanceset_featured_bvids": [
+    "BV1g34y1t7sj",
+    "BV1iL4y1w78T",
+    "BV1Mi4y1Q7uX",
+    "BV1su411v7GR",
+    "BV1NR4y1P7qT",
+    "BV1rA4y1Z7og",
+    "BV1Ni4y1m7MP",
+    "BV1x94y1f7G7",
+    "BV1aS4y1m7aq",
+    "BV1h3411M7bp"
+  ]
+}
