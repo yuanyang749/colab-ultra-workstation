@@ -12,9 +12,18 @@
 colab-ultra-workstation/
 ├── SKILL.md                                           # Agent 智能硬件调度与防烧钱拦截技能定义
 ├── references/
+│   ├── deepseek_v41_748b_g4_guide.md                  # 单卡 96GB G4 驯服 748B DeepSeek-V4.1 零 Swap 实战与两大 2-Bit 旗舰评测指南
+│   ├── minimax_h3_zero_waste_sop.md                   # MiniMax-H3 视频生成、双擎云端 TTS 与潜变量续跑标准作业程序 (铁律 A~G)
 │   ├── minimax_h3_industrial_workflow_whitepaper.md   # MiniMax-H3 工业级写实长视频与多角色一致性全链路架构白皮书 (v2.5)
 │   └── minimax_h3_uncensored_comfyui_guide.md         # MiniMax-H3 无审核破限版 + Turbo 加速 + ComfyUI 高阶实战指南 (含实战踩坑与避坑总表)
 ├── scripts/
+│   ├── deepseek_g4/                                   # 748B DeepSeek-V4.1-Flash 单卡 G4 96GB 零 Swap 自动化脚本与「鹈鹕骑自行车」实测集
+│   │   ├── fast_start_g4.sh                           # 一键启动 / 22秒一机双模热切换 / 状态巡检 / 释放算力
+│   │   ├── step1_cpu_download_to_drive.py             # 0 CCU/h 免费 CPU 预下载 2-bit 主干分片 + 128KB Engram 稀疏头至 Google Drive
+│   │   ├── step2_g4_build_engines.sh                  # 编译 Blackwell sm_120a 原生 Delta Engine + llama.cpp 并打包 2 秒解压归档
+│   │   ├── step3_g4_hybrid_stage_and_benchmark.py     # 64 并发 Drive-v3 API 直灌 Gen5 NVMe + 三级内存锁定 + OpenAI 网关
+│   │   ├── run_pelican_benchmark.py                   # Simon Willison「鹈鹕骑自行车」交互式 SVG+JS 基准测试脚本
+│   │   └── examples/                                  # Unsloth UD-IQ2_XXS (原始/修复后) 与 Abiray GSQ-RCO IQ2_XXS 实测 HTML
 │   ├── colab_meter.py                                 # 开机打点 + 停机双轨 CCU 计费核验与幽灵实例强杀工具
 │   ├── launch_g4_comfyui_fast.py                      # G4 96GB 双通道并发 (Drive API + HF CDN) NVMe 极速冷启动引擎
 │   ├── resume_from_latent_checkpoint.py               # 分段原生潜变量 (SaveLatent/LoadLatent) 快照注入与零损耗断点续跑生成器
@@ -23,6 +32,8 @@ colab-ultra-workstation/
 │   ├── run_cloud_tts_remote.py                        # 本地遥控云端 TTS 极速合成与音频回传脚本
 │   ├── setup_minimax_h3_comfyui.py                    # 0 CCU/h 免费 CPU 全自动部署 ComfyUI 与核心模型权重脚本
 │   └── mcp_dfs_mount.py                               # colab-mcp 零浏览器挂载载荷一键生成器（含凭证擦除）
+├── assets/
+│   └── deepseek_v41_g4/                               # 748B DeepSeek-V4.1 G4 架构图、跑分总表与 Engram 置零实证配图
 ├── templates/
 │   └── workstation_init.py                            # 云端常驻硬件探测、配额校验与防烧钱下载器模块
 ├── notebooks/
@@ -80,7 +91,7 @@ echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
 # 1. 按档位创建并连接实例（全自动选卡）
 colab new -s work                                  # 启动免费 CPU (0 CCU/h) 下载模型/整理云盘
 colab new -s work --gpu L4                         # 启动 L4 GPU (22.5GB, 1.71 CCU/h)
-colab new -s work --gpu G4                         # 启动 G4 GPU (96GB Blackwell, 8.71 CCU/h)
+colab new -s work --gpu G4                         # 启动 G4 GPU (96GB Blackwell, 10.05 CCU/h)
 colab new -s work --gpu T4|A100|H100               # 启动 T4 / A100 / H100
 colab run train.py --gpu G4                        # “跑完即焚”：开一台 G4 跑完脚本立即自动销毁释放 VM
 
@@ -112,7 +123,7 @@ git clone https://github.com/yuanyang749/colab-ultra-workstation.git ~/.agents/s
    - **`CPU` (0 CCU/h)**：挂载 20TB/30TB Google Drive、从 HuggingFace 首次下载几十 GB 模型权重。
    - **`T4 GPU` (15GB, 1.19 CCU/h)**：1.5B ~ 9B LLM 的 4-bit 量化推理。
    - **`L4 GPU` (22.5GB Ada, 1.71 CCU/h)**：Wan2.1-1.3B / Flux 轻量生成；1.5B~9B 满血 BF16/FP8 推理与微调；**32B 4-bit (AWQ/Q4) 极限卡位推理**。
-   - **`G4 GPU` (96GB RTX PRO 6000 Blackwell, 6.7~8.71 CCU/h)**：**主力王炸卡（全面替代 A100/H100）**。具备 1 PFLOPS BF16 / 2 PFLOPS FP8 / 4 PFLOPS FP4 算力，96GB 超大显存支持 **33B `MiniMax-H3` 音视频同生大模型 + `Qwen3-VL-32B-Heretic NVFP4` / `Wan2.1-14B` / `HunyuanVideo` 100% 显存常驻（零 CPU Offload）**，以及 **32B/70B LLM 的 FP8 超长上下文推理与 QLoRA 微调**。
+   - **`G4 GPU` (96GB RTX PRO 6000 Blackwell, 8.71~10.05 CCU/h)**：**主力王炸卡（全面替代 A100/H100）**。具备 1 PFLOPS BF16 / 2 PFLOPS FP8 / 4 PFLOPS FP4 算力，96GB 超大显存 + 188GB DDR5 主机内存支持 **33B `MiniMax-H3` 音视频同生大模型 + `Qwen3-VL-32B-Heretic NVFP4` / `Wan2.1-14B` / `HunyuanVideo` 100% 显存常驻（零 CPU Offload）**、**32B/70B LLM 的 FP8 超长上下文推理与 QLoRA 微调**，以及 **748B `DeepSeek-V4.1-Flash-1017`（552B MoE 骨干 `138.6~165.3 GB` 100% 锁入显存+内存，0 Swap 达 `47.4~51.5 tok/s`）**。
 2. **零浏览器静默挂载与不断联守护（`colab-dfs-ext`）**：
    - 彻底告别 `drive.mount` 人工弹窗确认，支持 `--readonly` 只读防误删挂载、云端后台 Token 自动续期（合盖睡觉跑长任务不掉盘）以及 FUSE 假死原地重挂。
 3. **防烧钱硬拦截（Burn-Rate Guard）与双轨 CCU 计费强杀（`colab_meter.py`）**：
@@ -120,6 +131,29 @@ git clone https://github.com/yuanyang749/colab-ultra-workstation.git ~/.agents/s
    - 每次 GPU 任务强制执行 `colab_meter.py start/stop`，自动完成开机余额打点、停机强杀全部残余会话（确认 `Active assignments: 0` 且 `0.00 CCU/h`）并输出双轨 CCU 账单。
 4. **大炮打蚊子预警**：
    - 当检测到使用 G4/H100 运行 <9B 小模型或轻量任务时，自动提醒降级至 L4/T4 节省 CCU。
+
+---
+
+## 🐋 单卡 96GB G4 驯服 748B DeepSeek-V4.1-Flash (`0 Swap` 47~52 tok/s + 一机双模网关)
+
+本仓库内置了在单张 **Colab G4 (96GB GDDR7 + 188GB DDR5 + Gen5 NVMe)** 上零磁盘 Swap 跑通 **748B `DeepSeek-V4.1-Flash-1017`** 的全套自动化脚本（[`scripts/deepseek_g4/`](scripts/deepseek_g4/)）与深度实测指南 **[《把 Google AI Ultra 1000 CCU 榨出双倍价值（第三弹）：用单卡 96GB G4 跑通 748B DeepSeek-V4.1 折腾实录》](references/deepseek_v41_748b_g4_guide.md)**：
+
+![96GB G4 × 748B DeepSeek-V4.1-Flash 旗舰量化对比 & 115K 极限压测总表](assets/deepseek_v41_g4/ep3_ds41_fig0_overview_table.png)
+
+1. **552B MoE 骨干网 + 196B Engram 拆包与三级混合零 Swap 架构**：
+   - 绕开 FUSE 云盘 `112 GiB` 缓存墙与 `0.4 tok/s` 随机读龟速，通过 **64 并发 Google Drive v3 API Range 流** 将 `Unsloth Dynamic V3.1 UD-IQ2_XXS`（5 个骨干分片 `165.30 GB`）或 `Abiray Uncensored GSQ-RCO IQ2_XXS`（4 个骨干分片 `138.59 GB`）直灌本地 Gen5 NVMe 并同步预热 `188GB DDR5` Page Cache；
+   - 将每层必经的 Dense MLA 注意力层、共享专家、`128K` `NVFP4` KV Cache 以及最活跃的 **10,947 个专家（71%，`~87.2 GiB`）** 钉死在 `96GB GDDR7` 显存，剩余 **4,413 个专家（29%）** 全部锁入 `188GB DDR5` 锁页内存池（`--arena-gib 76`），196B Engram 采用 `128 KB` 稀疏 GGUF 头置零启动，实现 **全程 0 磁盘 Swap、稳定输出 `47.4 ~ 51.5 tok/s`、115K 超长代码库 34 秒极速预填充**。
+2. **零显存「一机双模」网关与 64K 防截断机制**：
+   - 单实例同时对外暴露 `deepseek-v4.1-flash-1017-standard` 与 `deepseek-v4.1-flash-1017-uncensored` 两个 OpenAI 兼容模型 ID，默认托底 `65,536` (`64K`) 最大生成长度并支持多轮 `<think>` 自动剥离与 KV 快照回滚。
+3. **「鹈鹕骑自行车」三方同屏对决与 Engram 置零「提笔忘字」第一性原理解剖**：
+   - 完整收录 [`Unsloth UD-IQ2_XXS` 原始版](scripts/deepseek_g4/examples/pelican_ud_iq2xxs.html)、[`Unsloth UD-IQ2_XXS` 拼写与原点修复版](scripts/deepseek_g4/examples/pelican_ud_iq2xxs_fixed.html) 与 [`Abiray GSQ-RCO IQ2_XXS` 赛博日落版](scripts/deepseek_g4/examples/pelican_abiray_iq2xxs.html) 交互式源码，实证 552B MoE 骨干网负责硬核数学/逆运动学推理、196B Engram 负责单词拼写与语法肌肉记忆（揭秘 `<ellips>` 丢云朵、双重 `transform-origin` 致喉囊 `76px` 狂抖及 `body.dataset["theheme".replace("theheme","theme")]` 现场自救名场面）。
+4. **四条命令极速开跑（[`scripts/deepseek_g4/fast_start_g4.sh`](scripts/deepseek_g4/fast_start_g4.sh)）**：
+   ```bash
+   ./scripts/deepseek_g4/fast_start_g4.sh start --variant unsloth-ud-iq2xxs
+   ./scripts/deepseek_g4/fast_start_g4.sh status
+   ./scripts/deepseek_g4/fast_start_g4.sh switch --variant abiray-gsq-iq2xxs
+   ./scripts/deepseek_g4/fast_start_g4.sh stop
+   ```
 
 ---
 
