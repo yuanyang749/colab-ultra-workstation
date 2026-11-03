@@ -13,7 +13,7 @@
 ![96GB G4 × 748B DeepSeek-V4.1-Flash 旗舰量化对比 & 115K 极限压测总表](../assets/deepseek_v41_g4/ep3_ds41_fig0_overview_table.png)
 
 > **⚡ 先放我实测下来的几个核心结论：**
-> 1. **不用被 275GB 吓到，核心权重其实只有 165GB**：看懂 Unsloth 文档后我才发现，748B 里真正负责思考和写代码的 552B 骨干网（前 5 个分片）只有 **`165.3 GB`**（Abiray 版更是只有 **`138.6 GB`**），刚好能全部塞进 G4 的 **96GB 显存 + 188GB 内存** 里。代价是 196B 的 Engram 表我只能置零，具体影响见第四章。
+> 1. **不用被 275GB 吓到，核心权重其实只有 165GB（但写代码千万别把 Engram 置零！）**：看懂文档后我才发现，748B 里负责思考和写代码的 552B 骨干网（前 5 个分片）只有 **`165.3 GB`**（Abiray 版更是只有 **`138.6 GB`**），能全部塞进 G4 的 **96GB 显存 + 188GB 内存**。我这次测试为了省本地硬盘空间，把 196B 的 Engram 查找表置零跑完了全程；但从第四章鹈鹕骑车的源码实测来看，**Engram 置零会导致严重的「提笔忘字」拼写 Bug，日常写代码还是不能置零**——我在第四章末尾补上了在单卡 G4 上挂载完整 Engram 的 3 个落地方案。
 > 2. **生成速度够快，长文也不卡**：平时聊天写代码稳定在 **`47 ~ 52 tok/s`**（首字响应 2 秒左右）；模型原生支持 1M 上下文，我在 G4 上开了 128K 窗口，实测塞进去 **11.5 万 Token** 的代码库，**34 秒**就开始往外蹦字了。
 > 3. **一套权重、两种人设**：我写了个小网关，不多占显存，在客户端里同时刷出 `standard` 和 `uncensored` 两个模型名（本质是同一份权重配不同的系统提示词），通过 Cloudflare 固定隧道直接连到本地桌面端用。
 
@@ -30,7 +30,7 @@
 
 搞清楚这点之后，账一下就算过来了：G4 有 **96GB 显存 + 188GB 内存**，装一个 139GB～165GB 的骨干网没问题。
 
-但 Engram 就装不下了：165GB 骨干加 110GB Engram 已经超过本地 NVMe 能用的约 205GB，内存更放不下。所以我最后的做法是 **只写入 Engram 文件开头的 128KB 头信息，后面全部置零**（稀疏文件，几乎不占盘），让推理引擎能正常启动。下面所有的速度和实测，都是在 Engram 置零的状态下跑出来的。
+但当时看本地硬盘，165GB 骨干加 110GB Engram 已经超过 G4 本地 NVMe 能用的约 205GB，而且看到 Unsloth 文档说删掉 Engram 不影响跑分，我这次测试就偷了个懒：**只写入 Engram 文件开头的 128KB 头信息，后面全部置零**（稀疏文件，几乎不占盘），先把推理引擎跑起来。既然已经测到这一步了，下面所有的速度和实测都是在这套 Engram 置零的环境下跑出来的——至于为什么实测证明 **Engram 其实不能置零**，以及怎么在 G4 上把真 Engram 塞进去，我们放到第四章详细拆解。
 
 ![96GB G4 (Blackwell) 三级混合零 Swap 架构 & 64 并发 NVMe 极速预热](../assets/deepseek_v41_g4/ep3_ds41_fig1_3tier_arch_and_fastboot.png)
 
@@ -112,7 +112,29 @@
 
 把这个对比画面和源码放在一起看，748B 架构的分工一下就透亮了：
 - **为什么 Unsloth 测数学跑分（AIME / MMLU）发现删掉 Engram 没影响？** 因为数学题最后只看括号里的一个数字（比如 `123`），选择题只看 `A/B/C/D`，这些纯靠 **552B MoE 骨干网** 的逻辑推理就能拿满分。
-- **那 196B 的 Engram 表到底是干嘛的？** 它其实就是模型的「**拼写与语法肌肉记忆库**」！DeepSeek 把死记硬背单词怎么拼、HTML 标签和 DOM API 怎么连写的活儿交给了这个 196B 的查找表。一旦把它置零，模型脑子虽然还很聪明（连逆运动学都手到擒来），但写起代码来就像一个「逻辑满分却突然提笔忘字」的程序员。所以我的建议是：**如果你的机器装得下（比如有 300GB 以上的内存或高速盘），就老老实实挂上完整的 `IQ4_NL` Engram**；像 G4 这样装不下只能置零的，生成的代码记得先跑一遍语法检查，把拼写小瑕疵顺手替换掉就能满血复活。
+- **那 196B 的 Engram 表到底是干嘛的？** 它其实就是模型的「**拼写与语法肌肉记忆库**」！DeepSeek 把死记硬背单词怎么拼、HTML 标签和 DOM API 怎么连写的活儿交给了这个 196B 的查找表。一旦把它置零，模型脑子虽然还很聪明（连逆运动学都手到擒来），但写起代码来就像一个「逻辑满分却突然提笔忘字」的程序员。
+
+## 💡 既然实测证明 Engram 真不能置零，在单卡 G4 上怎么把完整 Engram 挂上去？
+
+说实话，虽然我这次为了省事直接用「Engram 置零」测完了全程，但看完鹈鹕这份错字连篇的原始代码，结论已经非常明确了：**只要你是拿它来写正经代码，这个 196B 的 Engram 记忆表还真不能置零！**
+
+那问题来了：G4 的本地 NVMe 盘只有大约 **`205 GB`** 可用空间，直接塞 `138.6 GB / 165.3 GB` 的骨干网再加上 `110.6 GB` 的 `IQ4_NL` Engram 肯定会爆盘。怎么在单卡 G4 上把真 Engram 挂上去？
+
+我仔细去翻了 ISTA-DASLab 的官方架构说明，发现了一个特别关键的机制：**Engram 只是一个按 Token 稀疏查表的权重（每蹦一个词只从硬盘按行读几 KB），它只需要用 `mmap` 挂在本地 SSD 盘上，完全不占显存（0 GB VRAM）也不占内存（0 GB RAM）！**
+
+搞懂这点之后，在单卡 G4 上挂载完整 Engram 就有 **3 个非常合理的落地方案**：
+
+1. **方案一（最推荐 · 满血零妥协）：「本地 NVMe + `/dev/shm` 内存盘」错位混放法**
+   - **核心思路**：既然 Engram 只占硬盘不占内存，而 G4 又有 **`188 GB` 的超大 DDR5 内存**，我们完全不用把所有分片都死磕在 `205 GB` 的本地 NVMe 盘里！
+   - **具体做法**：
+     - 把 **`110.6 GB` 的完整 `IQ4_NL` Engram** 和 **前 2 个骨干分片（约 `79~99 GB`）** 放在本地 NVMe 盘（`/content/fast_deepseek`），加起来约 `190~200 GB`，刚好塞进 `205 GB` 本地盘；
+     - 用一行命令把系统的内存盘扩容：`mount -o remount,size=85G /dev/shm`，把 **剩下的骨干分片（约 `60~65 GB`）** 直接下载到 `/dev/shm` 内存盘里，再软链接回模型目录；
+     - 启动推理引擎后，那 `60~65 GB` 放在内存盘里的骨干专家有大半会被直接抽进 **`96GB` 显存** 里钉死，剩下的本来也要留在 DDR5 内存里——相当于 **一分钱内存没多花，白赚了 65GB 硬盘空间**，让单卡 G4 同时跑满 **完整 552B 骨干网 + 完整 `110.6 GB` Engram**！
+2. **方案二（专攻写代码 · 免折腾一把塞进 NVMe）：换用 `ISTA-DASLab` 的 `GSQ-RCO-Coder`（`72.1 GB` 骨干 + `110.6 GB` 完整 Engram = `182.7 GB`）**
+   - **核心思路**：如果你主要拿它来写代码、画前端 SVG 或者跑 Agent，ISTA-DASLab 同步开源了一个专门针对代码校准剪枝的 **[`DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF`](https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF)**（把每层 384 个专家精准裁剪保留最核心的 192 个代码专家，LiveCodeBench v6 代码跑分保留率高达 **`98.7%`**）。
+   - **具体做法**：它的骨干网只有 **`72.12 GB`**，加上完整的 **`110.60 GB` `IQ4_NL` Engram**，总体积只有 **`182.72 GB`**！不用折腾内存盘，直接一把全塞进 G4 的 `205 GB` 本地 NVMe 盘。更爽的是，`72.1 GB` 的骨干网能 **100% 全部钉死在 G4 的 96GB 显存里**，推理速度和单词拼写准确率双双满血。
+3. **方案三（单分片瘦身法）：把 `110.6 GB` 的 Engram 分片单独量化到 2-bit（约 `50~55 GB`）**
+   - **核心思路**：社区默认给的 Engram 分片之所以高达 `110.6 GB`，是因为大家都把它固定留在了奢侈的 `4.50 bpw`（`IQ4_NL`）。如果用 `llama-quantize` 把第 6 个 Engram 分片单独压到 `Q2_K` 或 `IQ2_XXS`（体积直接砍半到 **`50~55 GB`**），配着 `138.6 GB` 的 Abiray 骨干（合计约 `190 GB`）也能直接装进本地 NVMe 盘，比置零强太多。
 
 ---
 
@@ -123,7 +145,8 @@
 ![两大 2-Bit 旗舰量化版 vs 官方满血版「鹈鹕骑自行车」与选型总表](../assets/deepseek_v41_g4/ep3_ds41_fig3_pelican_and_selection_table.png)
 
 - 如果你更看重 **官方跑分和工程严谨度**，选 **`Unsloth Dynamic V3.1 UD-IQ2_XXS`**（165.3GB 骨干，把 G4 的 96GB 显存和 76GB 锁页内存刚好榨干）；
-- 如果你想 **留点内存余量、或者想要去审查的版本**，选 **`Abiray GSQ-RCO IQ2_XXS`**（138.6GB 骨干）。
+- 如果你想 **留点内存余量、或者想要去审查的版本**，选 **`Abiray GSQ-RCO IQ2_XXS`**（138.6GB 骨干）；
+- 如果你 **专门用来写代码且不想折腾 `/dev/shm` 内存盘混放**，也可以试试上面提到的 **`ISTA-DASLab GSQ-RCO-Coder`**（72.1GB 骨干 + 110.6GB 完整 Engram）。
 
 我已经把开机预热、双模型网关和热切换全都打包进了 [`scripts/deepseek_g4/fast_start_g4.sh`](../scripts/deepseek_g4/fast_start_g4.sh)，平时用起来就这 4 条命令：
 
@@ -151,5 +174,6 @@
 - **Unsloth 官方文档与 V3.1 跑分说明**：https://unsloth.ai/docs/models/deepseek-v4.1-flash
 - **Unsloth `UD-IQ2_XXS` GGUF 仓库**：https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF
 - **Abiray `GSQ-RCO IQ2_XXS` GGUF 仓库**：https://huggingface.co/Abiray/DeepSeek-V4.1-Flash-1017-Uncensored-GSQ-RCO-IQ2_XXS-GGUF
+- **ISTA-DASLab `GSQ-RCO-Coder` 代码专精版仓库（72.1GB 骨干 + 110.6GB Engram）**：https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF
 - **Google 官方 Colab 命令行工具 (`google-colab-cli`)**：https://github.com/googlecolab/google-colab-cli
 - **Colab 云盘静默挂载扩展 (`colab-dfs-ext`)**：https://github.com/deluxebear/colab-dfs-ext
