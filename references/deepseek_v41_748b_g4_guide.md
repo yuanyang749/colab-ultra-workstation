@@ -57,7 +57,14 @@
 - **彻底解决长代码被截断**：我保留了官方默认的 `8,192` 深度思考预算，同时在网关层把默认最大输出直接托底拉到了 **`65,536`（64K）tokens**。哪怕模型思考用满 8,192 tokens，后面还剩 5 万多 tokens 够它一次性把几千行代码写完；如果回答很短，说完也会立刻停。
 - **多轮对话不用每轮从头重算**：服务端会自动把前几轮历史里的 `<think>` 思考过程剥掉，并用 KV 快照回滚到上一轮，只增量计算新内容。当然对话越长，每个 token 要看的上下文越多，速度还是会慢慢下降一点。
 
-至于怎么连回我自己的电脑？如果是在 G4 实例内部跑测试脚本，直接连 `http://127.0.0.1:18150` 延迟最低；但我平时是在自己的 Mac 上用客户端，所以我配了一条 **Cloudflare 固定隧道**。像下面这样把隧道地址填进 **deepseek HARNESS** 客户端里，点一下「获取可用模型」，两个模型就全出来了，每次重启 Colab 也不用改地址：
+至于怎么连回我自己的电脑？如果是在 G4 实例内部跑测试脚本，直接连 `http://127.0.0.1:18150` 延迟最低；但平时在自己的 Mac 上用桌面客户端，如果用默认的 `trycloudflare.com` 临时隧道，每次重启 Colab 都会换一串随机域名，每天还得去客户端里改地址，非常烦人。
+
+所以我干脆花 2 分钟配了一条 **Cloudflare 自定义域名固定隧道（Named Tunnel）**，一次配好终身免改：
+1. **建隧道拿 Token**：登录 [Cloudflare Zero Trust 控制台](https://one.dash.cloudflare.com/)，进入 `Networks -> Tunnels` 点创建隧道（选 `Cloudflared`），复制页面生成的那串 `eyJhIjoi...` 开头的 **Tunnel Token**；
+2. **绑自定义子域名**：在隧道的 `Public Hostname` 里填上你托管在 Cloudflare 的子域名（比如我配的 `deepseek.delroys.uk`），后端 `Service` 类型选 `HTTP`、地址填 **`127.0.0.1:18150`**（对应 G4 上的双模网关端口）；
+3. **开机自动挂载**：在 Colab 里跑一句 `cloudflared tunnel run --token <你的Token>`（我已经把它集成进了 `fast_start_g4.sh`，只要导出环境变量 `CF_TUNNEL_TOKEN` 就会自动挂上固定域名；不传 Token 则自动回退到免配置的 `trycloudflare.com` 临时域名）。
+
+配好之后，像下面这样把 `https://你的域名/v1` 填进 **deepseek HARNESS** 客户端里，点一下「获取可用模型」，两个模型就全刷出来了，以后不管 Colab 重启多少次，客户端永远不用改配置：
 
 ![deepseek HARNESS 客户端配置实拍](../assets/deepseek_v41_g4/deepseek_harness_config.png)
 
