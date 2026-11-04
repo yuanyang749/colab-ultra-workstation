@@ -27,21 +27,28 @@ description: "Google AI Ultra (5x 1,000 CCU + 20TB / 20x 2,000 CCU + 30TB Google
 | **`llm_small` (1.5B ~ 9B)**<br>*Qwen3-8B / Llama-3.1-8B* | **`T4 GPU`** (15GB)<br>**1.19 CCU/h** | **`L4 GPU`** (22.5GB)<br>**1.71 CCU/h** | **`L4 GPU`** (22.5GB)<br>**1.71 CCU/h** | **严禁开 G4/A100 跑 8B 模型**（大炮打蚊子）。L4 支持 Ada 原生 FP8，性价比最高。 |
 | **`llm_medium` (14B ~ 32B)**<br>*Qwen-32B / R1-Distill-32B* | **`L4 GPU`** (22.5GB)<br>**1.71 CCU/h** *(32B Q4 ~19GB)* | • **14B (FP8)** 👉 **`L4`**<br>• **32B (BF16/FP8)** 👉 **`G4`** (**10.05 CCU/h**) | • **14B QLoRA** 👉 **`L4`**<br>• **32B QLoRA** 👉 **`G4`** | 跑 32B 4-bit 量化直接用 **L4** 极限卡位最省钱；跑 32B 满血 BF16 (~68GB) 直接上 **G4 (96GB)**。 |
 | **`llm_large` (70B ~ 72B)**<br>*Llama-3.3-70B / Qwen2.5-72B* | **`G4 GPU`** (96GB)<br>**10.05 CCU/h** *(原生 NVFP4)* | **`G4 GPU`** (96GB)<br>**10.05 CCU/h** *(权重 ~72GB + 24GB KV)* | **`G4 GPU`** (96GB)<br>**10.05 CCU/h** | 70B FP8 权重占 72GB，80G 显卡只剩 8GB 给 KV Cache；**G4 (96GB)** 多出 16GB 全部变为上下文空间。 |
-| **`llm_ultra_moe` (748B 旗舰 MoE)**<br>*DeepSeek-V4.1-Flash-1017 (`IQ2_XXS`)* | **`G4 GPU`** (96GB GDDR7 + 188GB DDR5)<br>**10.05 CCU/h** *(0 Swap, **47.4~51.5 tok/s**)* | 需使用 2-bit 旗舰量化 (`UD-IQ2_XXS` / `GSQ-RCO IQ2_XXS`) + Delta `sm_120a` | N/A | 552B MoE 主干 (`138.6~165.3 GB`) 100% 锁死在「96GB GDDR7 + 188GB DDR5」，196B Engram 采用 128KB 稀疏头置零启动。详见 [`references/deepseek_v41_748b_g4_guide.md`](references/deepseek_v41_748b_g4_guide.md)。 |
+| **`llm_long_vision` (800K 超长上下文 + 视觉)**<br>*Qwen3.8-Flash-Next (`IQ3_S` + `BF16 mmproj`)* | **`G4 GPU`** (96GB GDDR7 + 176GB DDR5)<br>**10.05 CCU/h** *(800K YaRN 3.125x)* | 84GB GGUF 全显存卸载 + `27.5 GiB` n-gram 表常驻主机内存 | N/A | 直接通过 `colabllm qwen-flash up` 一键启动（结合 `colab_meter.py start/stop -s qwen-flash -g G4` 精确计费）。 |
+| **`llm_ultra_moe` (748B 旗舰 MoE)**<br>*DeepSeek-V4.1-Flash-1017 (`IQ2_XXS`)* | **`G4 GPU`** (96GB GDDR7 + 188GB DDR5)<br>**10.05 CCU/h** *(0 Swap, **47.4~54.6 tok/s**)* | 需使用 2-bit 旗舰量化 + Delta `sm_120a`：<br>• **代码首选 (`ista-coder-iq2xxs`)**：`72.12 GB` 主干 100% 锁显存 (`69.5 GiB`) + **`110.60 GB` 完整 `IQ4_NL` Engram 100% 锁 DDR5 内存**，实测 **`54.63 tok/s`**，0 拼写错误<br>• **全专家 (`unsloth-ud-iq2xxs` / `abiray-gsq-iq2xxs`)**：`138.6~165.3 GB` 主干 + 128KB 稀疏头 Engram (`47.4~51.5 tok/s`) | N/A | 详见 [`references/deepseek_v41_748b_g4_guide.md`](references/deepseek_v41_748b_g4_guide.md) 与 [`scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py`](scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py)。 |
 | **`llm_bandwidth` (极致单流吐字)** | **`H100 GPU`** (80GB HBM3, **18.05 CCU/h**) | 仅当总显存 < 75GB 且追求极致 HBM3 带宽时选用 | 不推荐（G4 性价比高一倍） | 日常 LLM 推理/微调优先用 **L4** 和 **G4**。 |
 
-## 3. 本地环境自检与一键安装指南 (`colab-mcp` + `google-colab-cli` + `colab-dfs-ext`)
+## 3. 本地环境自检与一键安装指南 (`colab-mcp` + `google-colab-cli` + `colab-dfs-ext` + `colabllm`)
 
 ```bash
 # 1) 安装 colab-mcp（网页桥接通道，含 socksio 代理兼容）
 uv tool install --with socksio --force git+https://github.com/googlecolab/colab-mcp
 
-# 2) 安装官方 google-colab-cli 与 colab-dfs-ext（零浏览器静默挂载扩展）
+# 2) 安装官方 google-colab-cli (0.7.5+) 与 colab-dfs-ext（零浏览器静默挂载扩展）
 uv tool install --with socksio google-colab-cli
 curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-dfs-ext/main/install.sh | sh
 colab dfs doctor
 
-# 3) 首次一次性 OAuth 授权（⚠️ 浏览器弹窗中务必手动勾选 Google Drive 复选框！）
+# 3) 安装 colabllm (0.1.2+) 与 Cloudflare cf CLI（标准化多模态运行时与固定域名编排）
+uv tool install colabllm
+colabllm skill --output ~/.agents/skills
+npm install -g cf --prefix ~/.local
+colabllm doctor --online --transport quick
+
+# 4) 首次一次性 OAuth 授权（⚠️ 浏览器弹窗中务必手动勾选 Google Drive 复选框！）
 https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab dfs consent
 grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
 ```
@@ -94,3 +101,27 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
   - 当需要深入了解方案 A/B 架构、22 帧潜空间接力、`H3 Join Match` 手动参数、`Self-Anchor Voice` 原生自锚定声纹或 `V3 ProSeam` 武指分镜语法时，读取 **[`references/minimax_h3_industrial_workflow_whitepaper.md`](references/minimax_h3_industrial_workflow_whitepaper.md)**。
 - **MiniMax-H3 无审核破限版与 ComfyUI 节点搭建指南**：
   - 当用户首次搭建 `MiniMax-H3` + `Qwen3-VL-32B-Ultra-Heretic` 无审核编码器或配置 2K 视频超分时，读取 **[`references/minimax_h3_uncensored_comfyui_guide.md`](references/minimax_h3_uncensored_comfyui_guide.md)**。
+
+## 6. 与 `colabllm` CLI 及技能的协同调度规范 (Dual-Skill Synergy)
+
+本工作站已与 [`deluxebear/colabllm`](https://github.com/deluxebear/colabllm)（已安装于 `~/.local/bin/colabllm`，配套技能位于 `~/.agents/skills/colabllm/SKILL.md`）深度打通，分工与联动规则如下：
+
+1. **何时优先使用本技能脚本 (`colab-ultra-workstation`)**：
+   - 运行 **748B `DeepSeek-V4.1-Flash-1017`**（尤其是 **`ista-coder-iq2xxs` 72.12GB 全显存主干 + 110.60GB 完整 Engram 全内存缓存** `54.63 tok/s` 方案，以及 `unsloth-ud-iq2xxs` / `abiray-gsq-iq2xxs` 双模型网关）：使用 [`scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py`](scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py)（现已内置 `--auth-caddy` 双模鉴权与 `--tunnel` 支持）。
+   - 运行高度定制的 **MiniMax-H3 22 帧潜变量接力 / 无审核编码器工作流** 与 **64 并发 Google Drive v3 API 直拉**。
+
+2. **何时优先调用 `colabllm` CLI（并叠加 `colab_meter.py` 计费闭环）**：
+   - 当用户需要快速拉起以下标准化多模态/工具服务时，直接调用 `colabllm <service> up`（详细参数查阅 `~/.agents/skills/colabllm/references/<service>.md`）：
+     - **G4 (`10.05 CCU/h`)**：`qwen-flash`（Qwen3.8-Flash-Next 800K 上下文 + BF16 视觉）、`nemotron-transcribe`（30B 语音转写）、`longcat-video` / `longcat-avatar`、`openjutsu`（MiniMax H3 Studio Web UI）
+     - **A100 (`8.71 CCU/h`)**：`unlimited-ocr`（批量 PDF/图片转 Markdown，支持断点续传）
+     - **L4 (`1.71 CCU/h`)**：`qwen3-tts`、`indextts`、`comfyui`、`unsloth-studio`
+     - **T4 (`1.19 CCU/h`)**：`ollama`
+   - **强制计费包裹铁律**：调用 `colabllm <service> up` 前后，必须配合 `scripts/colab_meter.py` 打点与单会话结算（会话名与 `<service>` 或 `<service>-<instance>` 一致）：
+     ```bash
+     # 启动前打点
+     python3 scripts/colab_meter.py start -s qwen-flash -g G4
+     colabllm qwen-flash up --ready-timeout 3600
+     # 任务完成后单会话释放并输出标准计费核验报告
+     colabllm qwen-flash down
+     python3 scripts/colab_meter.py stop -s qwen-flash
+     ```

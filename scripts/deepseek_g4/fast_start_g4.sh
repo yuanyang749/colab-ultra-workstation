@@ -4,12 +4,13 @@
 # on Google Colab G4 (NVIDIA RTX PRO 6000 Blackwell 96GB GDDR7 + 188GB DDR5 RAM)
 #
 # Supported Flagship 2-bit Variants:
+#   - ista-coder-iq2xxs : ISTA-DASLab GSQ-RCO-Coder (72.12 GB Backbone 100% VRAM + 110.60 GB Full IQ4_NL Engram 100% DDR5, 54.6 tok/s)
 #   - unsloth-ud-iq2xxs : Unsloth Dynamic V3.1 UD-IQ2_XXS (165.30 GB, default)
 #   - abiray-gsq-iq2xxs : Abiray Uncensored GSQ-RCO IQ2_XXS (138.59 GB)
 #
 # Usage:
-#   ./scripts/deepseek_g4/fast_start_g4.sh start [--variant unsloth-ud-iq2xxs|abiray-gsq-iq2xxs]
-#   ./scripts/deepseek_g4/fast_start_g4.sh switch <unsloth-ud-iq2xxs|abiray-gsq-iq2xxs>
+#   ./scripts/deepseek_g4/fast_start_g4.sh start [--variant ista-coder-iq2xxs|unsloth-ud-iq2xxs|abiray-gsq-iq2xxs]
+#   ./scripts/deepseek_g4/fast_start_g4.sh switch <ista-coder-iq2xxs|unsloth-ud-iq2xxs|abiray-gsq-iq2xxs>
 #   ./scripts/deepseek_g4/fast_start_g4.sh status   # Check local tunnel, health & GPU telemetry
 #   ./scripts/deepseek_g4/fast_start_g4.sh stop     # Stop local tunnel and unassign G4 GPU (0 CCU/h)
 # ==============================================================================
@@ -24,7 +25,9 @@ fi
 LOCAL_PORT="${LOCAL_PORT:-8150}"
 REMOTE_PORT="${REMOTE_PORT:-8150}"
 QUALITY_MODE="${QUALITY_MODE:-exact}"
-VARIANT="${VARIANT:-unsloth-ud-iq2xxs}"
+VARIANT="${VARIANT:-ista-coder-iq2xxs}"
+SESSION_NAME="${SESSION_NAME:-ds41-g4}"
+EXTRA_ARGS=()
 
 ACTION="${1:-start}"
 shift || true
@@ -32,12 +35,16 @@ shift || true
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --variant|-v)
-            VARIANT="${2:-unsloth-ud-iq2xxs}"
+            VARIANT="${2:-ista-coder-iq2xxs}"
             shift 2
             ;;
-        unsloth-ud-iq2xxs|abiray-gsq-iq2xxs)
+        ista-coder-iq2xxs|unsloth-ud-iq2xxs|abiray-gsq-iq2xxs)
             VARIANT="$1"
             shift
+            ;;
+        --session|-s)
+            SESSION_NAME="${2:-ds41-g4}"
+            shift 2
             ;;
         --quality-mode|-q)
             QUALITY_MODE="${2:-exact}"
@@ -46,6 +53,14 @@ while [[ $# -gt 0 ]]; do
         --port|-p)
             LOCAL_PORT="${2:-8150}"
             REMOTE_PORT="${2:-8150}"
+            shift 2
+            ;;
+        --auth-caddy)
+            EXTRA_ARGS+=("--auth-caddy")
+            shift
+            ;;
+        --tunnel)
+            EXTRA_ARGS+=("--tunnel" "${2:-quick}")
             shift 2
             ;;
         *)
@@ -57,24 +72,24 @@ done
 case "${ACTION}" in
   status)
     echo "=== [1] Local Colab Meter & Active Sessions ==="
-    python3 "${METER_PY}" status || true
+    /Users/delroy/.local/share/uv/tools/google-colab-cli/bin/python "${METER_PY}" report || true
     echo ""
     echo "=== [2] Local OpenAI Endpoint Health (http://127.0.0.1:${LOCAL_PORT}/health) ==="
     curl -s "http://127.0.0.1:${LOCAL_PORT}/health" | python3 -m json.tool || echo "Local tunnel not listening on :${LOCAL_PORT}"
     ;;
 
   stop)
-    echo "=== Stopping local SSH tunnel on :${LOCAL_PORT} & Releasing G4 GPU ==="
+    echo "=== Stopping local SSH tunnel on :${LOCAL_PORT} & Releasing G4 Session (${SESSION_NAME}) ==="
     pkill -f "${LOCAL_PORT}:127.0.0.1:${REMOTE_PORT}" 2>/dev/null || true
-    echo "ℹ️ Run 'colab session rm <session_id>' or use colab-mcp to unassign the G4 runtime (0.00 CCU/h)."
-    python3 "${METER_PY}" status || true
+    ~/.local/bin/colab stop -s "${SESSION_NAME}" 2>/dev/null || true
+    /Users/delroy/.local/share/uv/tools/google-colab-cli/bin/python "${METER_PY}" stop -s "${SESSION_NAME}" || true
     ;;
 
   switch)
     echo "=== Hot-Swapping Active 2-Bit Model Variant on :${REMOTE_PORT} -> [${VARIANT}] ==="
     echo "Uploading step3_g4_hybrid_stage_and_benchmark.py and launching [${VARIANT}] (${QUALITY_MODE} mode)..."
     echo "Command on G4:"
-    echo "  python3 /content/step3_g4_hybrid_stage_and_benchmark.py --variant ${VARIANT} --mode delta --quality-mode ${QUALITY_MODE} --port ${REMOTE_PORT}"
+    echo "  python3 /content/step3_g4_hybrid_stage_and_benchmark.py --variant ${VARIANT} --mode delta --quality-mode ${QUALITY_MODE} --port ${REMOTE_PORT} ${EXTRA_ARGS[*]:-}"
     ;;
 
   start)
@@ -85,16 +100,16 @@ case "${ACTION}" in
     echo "   Endpoint     : http://127.0.0.1:${LOCAL_PORT}/v1"
     echo "================================================================================"
     echo "  1. Unpacks precompiled sm_120a binaries (g4_sm120a_engines.tar.gz) in ~2s"
-    echo "  2. Stages MoE backbone shards to local Gen5 NVMe via 64-stream Drive-v3 API (~150s)"
+    echo "  2. Stages MoE backbone shards to local Gen5 NVMe (~150-200s)"
     echo "     whilst warming 188GB DDR5 Page Cache in a single pass"
-    echo "  3. Starts Delta Server (${QUALITY_MODE} mode) + auto-seeds ~87.2 GiB GDDR7 VRAM (~20s)"
+    echo "  3. Starts Delta Server (${QUALITY_MODE} mode) + auto-seeds GDDR7 VRAM + Engram RAM"
     echo ""
     echo "Remote G4 command:"
-    echo "  python3 /content/step3_g4_hybrid_stage_and_benchmark.py --variant ${VARIANT} --mode delta --quality-mode ${QUALITY_MODE} --port ${REMOTE_PORT}"
+    echo "  python3 /content/step3_g4_hybrid_stage_and_benchmark.py --variant ${VARIANT} --mode delta --quality-mode ${QUALITY_MODE} --port ${REMOTE_PORT} ${EXTRA_ARGS[*]:-}"
     ;;
 
   *)
-    echo "Usage: $0 {start|switch|status|stop} [--variant unsloth-ud-iq2xxs|abiray-gsq-iq2xxs] [--quality-mode exact|turbo]"
+    echo "Usage: $0 {start|switch|status|stop} [--variant ista-coder-iq2xxs|unsloth-ud-iq2xxs|abiray-gsq-iq2xxs] [--quality-mode exact|turbo] [--auth-caddy] [--tunnel quick|named]"
     exit 1
     ;;
 esac

@@ -45,27 +45,30 @@ def get_consumption_info() -> tuple[float, float, int]:
         return (0.0, 0.0, 0)
 
 
-def get_active_sessions_summary() -> list[str]:
-    """Return human-readable summary strings for all currently active Colab sessions."""
+def get_active_sessions_summary() -> tuple[list[str], float]:
+    """Return human-readable summary strings and estimated hourly rate for all active Colab sessions."""
     items: list[str] = []
+    est_rate = 0.0
     try:
         from colab_cli.common import state
         sessions, assignments = state.sync_sessions()
         tracked_endpoints = set()
         for sid, s in sessions.items():
             ep = getattr(s, "endpoint", None)
-            hw = getattr(s, "accelerator", None) or getattr(s, "variant", "CPU")
+            hw = str(getattr(s, "accelerator", None) or getattr(s, "variant", "CPU")).upper()
             if ep:
                 tracked_endpoints.add(ep)
                 items.append(f"[{sid}] {hw} ({ep})")
+                est_rate += GPU_RATES.get(hw, 0.0)
         for a in assignments:
             ep = getattr(a, "endpoint", None)
             if ep and ep not in tracked_endpoints:
-                hw = getattr(a, "accelerator", None) or getattr(a, "variant", "GPU")
+                hw = str(getattr(a, "accelerator", None) or getattr(a, "variant", "GPU")).upper()
                 items.append(f"[untracked] {hw} ({ep})")
+                est_rate += GPU_RATES.get(hw, 0.0)
     except Exception:
         pass
-    return items
+    return items, est_rate
 
 
 def load_tracker() -> dict:
@@ -127,7 +130,11 @@ def cmd_stop(session: str | None = None, stop_all: bool = False) -> dict:
 
     # 2. Query final usage and remaining sessions
     end_bal, cur_rate, cur_count = get_consumption_info()
-    remaining_sessions = get_active_sessions_summary()
+    remaining_sessions, est_rem_rate = get_active_sessions_summary()
+    if cur_count == 0 and remaining_sessions:
+        cur_count = len(remaining_sessions)
+    if cur_rate <= 0.0 and est_rem_rate > 0.0:
+        cur_rate = est_rem_rate
 
     duration_str = "未知"
     cost_str = "0.00 CCU"
@@ -207,7 +214,11 @@ def main():
         cmd_stop(args.session, stop_all=args.all)
     elif args.cmd == "report":
         bal, rate, count = get_consumption_info()
-        rem = get_active_sessions_summary()
+        rem, est_rem_rate = get_active_sessions_summary()
+        if count == 0 and rem:
+            count = len(rem)
+        if rate <= 0.0 and est_rem_rate > 0.0:
+            rate = est_rem_rate
         rem_str = f" | Sessions: {', '.join(rem)}" if rem else ""
         print(f"Active assignments: {count} | Rate: {rate:.2f} CCU/h | Balance: {bal:.2f} CCU{rem_str}")
 

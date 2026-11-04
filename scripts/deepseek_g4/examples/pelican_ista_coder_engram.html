@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pelican Riding a Bicycle</title>
+<style>
+  :root {
+    --sky1: #a8d8ff;
+    --sky2: #e8f4ff;
+    --sun: #ffd966;
+    --hill1: #8fc07a;
+    --hill2: #5f9e5a;
+    --road: #4a4a4a;
+    --road-line: #f0e6c8;
+    --cloud: #ffffff;
+    --pelican: #f7f3e8;
+    --pelican-shadow: #d8d0c0;
+    --beak: #f4a261;
+    --pouch: #f6c28b;
+    --eye: #222;
+    --bike: #2b2b2b;
+    --bike-accent: #c0392b;
+    --water: #6fb3d6;
+    --fish: #ffb703;
+    --bubble: #ffffff;
+    --text: #222;
+    --controls-bg: rgba(255, 255, 255, 0.85);
+    --controls-border: #222;
+    --button: #f4a261;
+    --button-hover: #e76f51;
+    --shadow: rgba(0, 0, 0, 0.2);
+  }
+
+  [data-theme="sunset"] {
+    --sky1: #ff9a6b;
+    --sky2: #ffd6a5;
+    --sun: #ff6b35;
+    --hill1: #b56b4a;
+    --hill2: #7a4b3a;
+    --road: #3a2a2a;
+    --road-line: #f4c95d;
+    --cloud: #ffd1b3;
+    --pelican: #f7e8d8;
+    --pelican-shadow: #d8b8a0;
+    --beak: #e76f51;
+    --pouch: #f4b183;
+    --bike: #1b1b1b;
+    --bike-accent: #f4a261;
+    --water: #e76f51;
+    --fish: #ffd166;
+    --bubble: #fff3e0;
+    --text: #3a1f1f;
+    --controls-bg: rgba(255, 245, 230, 0.9);
+    --controls-border: #3a1f1f;
+    --button: #f4a261;
+    --button-hover: #e76f51;
+    --shadow: rgba(0, 0, 0, 0.25);
+  }
+
+  [data-theme="night"] {
+    --sky1: #0b1a3a;
+    --sky2: #1e3a5f;
+    --sun: #f5f0c0;
+    --hill1: #2f4f4f;
+    --hill2: #1f3a3a;
+    --road: #1a1a1a;
+    --road-line: #c0c0c0;
+    --cloud: #8fa6c0;
+    --pelican: #e8e8e8;
+    --pelican-shadow: #b0b0b0;
+    --beak: #d9845a;
+    --pouch: #e0a86a;
+    --bike: #111111;
+    --bike-accent: #e0a86a;
+    --water: #4a6fa5;
+    --fish: #ffd166;
+    --bubble: #e0e0e0;
+    --text: #e0e0e0;
+    --controls-bg: rgba(20, 30, 50, 0.9);
+    --controls-border: #e0e0e0;
+    --button: #e0a86a;
+    --button-hover: #f4a261;
+    --shadow: rgba(0, 0, 0, 0.5);
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  #scene {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .stars {
+    opacity: 0;
+  }
+
+  [data-theme="night"] .stars {
+    opacity: 1;
+  }
+
+  .controls {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 12px 16px;
+    background: var(--controls-bg);
+    border-top: 1px solid var(--controls-border);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 -4px 18px var(--shadow);
+    z-index: 10;
+  }
+
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--controls-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .control-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.8;
+  }
+
+  input[type="range"] {
+    width: 130px;
+    accent-color: var(--button);
+  }
+
+  .speed-value {
+    font-size: 0.85rem;
+    font-weight: 700;
+    min-width: 52px;
+    text-align: center;
+  }
+
+  .theme-btn {
+    border: 1px solid var(--controls-border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    background: transparent;
+    color: var(--text);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, transform 0.1s;
+  }
+
+  .theme-btn:hover {
+    background: var(--button);
+    color: #111;
+    transform: translateY(-1px);
+  }
+
+  .theme-btn.active {
+    background: var(--button);
+    color: #111;
+    box-shadow: 0 0 0 2px var(--button-hover);
+  }
+
+  .squawk-btn {
+    border: none;
+    border-radius: 10px;
+    padding: 9px 14px;
+    background: var(--button);
+    color: #111;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .squawk-btn:hover {
+    background: var(--button-hover);
+    transform: translateY(-1px);
+  }
+
+  .squawk-btn:active {
+    transform: translateY(1px);
+  }
+
+  @media (max-width: 700px) {
+    .controls {
+      gap: 8px;
+      padding: 8px 10px;
+    }
+    .control-group {
+      padding: 4px 7px;
+    }
+    input[type="range"] {
+      width: 100px;
+    }
+    .squawk-btn {
+      padding: 7px 10px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<svg id="scene" viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg" aria-label="Animated pelican riding a bicycle">
+  <defs>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color: var(--sky1)" />
+      <stop offset="1" style="stop-color: var(--sky2)" />
+    </linearGradient>
+
+    <linearGradient id="roadGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color: var(--road)" />
+      <stop offset="1" style="stop-color: #1d1d1d" />
+    </linearGradient>
+
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="var(--shadow)" />
+    </filter>
+
+    <filter id="smallShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="var(--shadow)" />
+    </filter>
+
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" style="stop-color: var(--sun); stop-opacity: 0.85" />
+      <stop offset="1" style="stop-color: var(--sun); stop-opacity: 0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Sky -->
+  <rect x="0" y="0" width="1000" height="520" fill="url(#skyGrad)" />
+
+  <!-- Sun / Moon glow -->
+  <circle cx="800" cy="120" r="105" fill="url(#sunGlow)" />
+  <circle cx="800" cy="120" r="55" style="fill: var(--sun); opacity: 0.95" />
+
+  <!-- Stars (visible at night) -->
+  <g class="stars" style="fill: var(--cloud); opacity: 0">
+    <circle cx="120" cy="70" r="2.5" />
+    <circle cx="180" cy="110" r="1.8" />
+    <circle cx="250" cy="55" r="2.2" />
+    <circle cx="330" cy="90" r="1.5" />
+    <circle cx="420" cy="45" r="2.0" />
+    <circle cx="520" cy="80" r="2.6" />
+    <circle cx="620" cy="50" r="1.7" />
+    <circle cx="710" cy="95" r="2.1" />
+    <circle cx="860" cy="60" r="1.8" />
+    <circle cx="930" cy="100" r="2.4" />
+    <circle cx="80" cy="150" r="1.6" />
+    <circle cx="380" cy="150" r="1.4" />
+    <circle cx="680" cy="140" r="1.8" />
+    <circle cx="900" cy="160" r="1.5" />
+  </g>
+
+  <!-- Clouds -->
+  <g id="clouds">
+    <g class="cloud" data-base-x="80" data-base-y="100" transform="translate(80,100)">
+      <ellipse cx="0" cy="0" rx="62" ry="22" style="fill: var(--cloud); opacity: 0.9" />
+      <ellipse cx="-32" cy="-10" rx="38" ry="20" style="fill: var(--cloud); opacity: 0.9" />
+      <ellipse cx="32" cy="-12" rx="42" ry="22" style="fill: var(--cloud); opacity: 0.9" />
+    </g>
+    <g class="cloud" data-base-x="300" data-base-y="80" transform="translate(300,80)">
+      <ellipse cx="0" cy="0" rx="48" ry="18" style="fill: var(--cloud); opacity: 0.85" />
+      <ellipse cx="-24" cy="-8" rx="30" ry="16" style="fill: var(--cloud); opacity: 0.85" />
+      <ellipse cx="24" cy="-10" rx="34" ry="18" style="fill: var(--cloud); opacity: 0.85" />
+    </g>
+    <g class="cloud" data-base-x="560" data-base-y="120" transform="translate(560,120)">
+      <ellipse cx="0" cy="0" rx="58" ry="20" style="fill: var(--cloud); opacity: 0.9" />
+      <ellipse cx="-28" cy="-9" rx="34" ry="18" style="fill: var(--cloud); opacity: 0.9" />
+      <ellipse cx="28" cy="-11" rx="38" ry="20" style="fill: var(--cloud); opacity: 0.9" />
+    </g>
+    <g class="cloud" data-base-x="820" data-base-y="70" transform="translate(820,70)">
+      <ellipse cx="0" cy="0" rx="44" ry="16" style="fill: var(--cloud); opacity: 0.8" />
+      <ellipse cx="-20" cy="-7" rx="26" ry="14" style="fill: var(--cloud); opacity: 0.8" />
+      <ellipse cx="20" cy="-8" rx="30" ry="16" style="fill: var(--cloud); opacity: 0.8" />
+    </g>
+  </g>
+
+  <!-- Parallax hills -->
+  <g id="hillsFar" transform="translate(0,0)">
+    <path d="M -100 500 Q 100 380 300 460 Q 500 360 700 460 Q 900 380 1100 500 L 1100 600 L -100 600 Z" style="fill: var(--hill1); opacity: 0.75" />
+    <path d="M 900 500 Q 1000 380 1200 460 Q 1400 360 1600 460 Q 1800 380 2000 500 L 2000 600 L 900 600 Z" style="fill: var(--hill1); opacity: 0.75" />
+  </g>
+
+  <g id="hillsNear" transform="translate(0,0)">
+    <path d="M -100 520 Q 120 430 320 500 Q 520 410 720 500 Q 920 430 1120 520 L 1120 600 L -100 600 Z" style="fill: var(--hill2); opacity: 0.9" />
+    <path d="M 900 520 Q 1120 430 1320 500 Q 1520 410 1720 500 Q 1920 430 2120 520 L 2120 600 L 900 600 Z" style="fill: var(--hill2); opacity: 0.9" />
+  </g>
+
+  <!-- Road -->
+  <rect x="0" y="500" width="1000" height="100" fill="url(#roadGrad)" />
+  <g id="roadLines" transform="translate(0,0)">
+    <rect x="0" y="535" width="1000" height="4" style="fill: var(--road-line); opacity: 0.55" />
+    <rect x="0" y="565" width="1000" height="3" style="fill: var(--road-line); opacity: 0.35" />
+    <rect x="0" y="585" width="1000" height="2" style="fill: var(--road-line); opacity: 0.25" />
+  </g>
+
+  <!-- Bicycle shadow -->
+  <ellipse cx="500" cy="520" rx="230" ry="22" fill="var(--shadow)" opacity="0.35" />
+
+  <!-- Bicycle -->
+  <g id="bicycle">
+    <!-- Rear wheel -->
+    <g id="rearWheel">
+      <circle cx="360" cy="440" r="76" fill="none" style="stroke: var(--bike); stroke-width: 9" />
+      <circle cx="360" cy="440" r="68" fill="none" style="stroke: var(--bike-accent); stroke-width: 3" opacity="0.8" />
+      <circle cx="360" cy="440" r="8" style="fill: var(--bike)" />
+      <g id="rearSpokes" transform="rotate(0 360 440)">
+        <line x1="360" y1="372" x2="360" y2="508" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="292" y1="440" x2="428" y2="440" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="312" y1="392" x2="408" y2="488" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="312" y1="488" x2="408" y2="392" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="336" y1="378" x2="384" y2="502" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="336" y1="502" x2="384" y2="378" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="300" y1="414" x2="420" y2="466" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="300" y1="466" x2="420" y2="414" style="stroke: var(--bike); stroke-width: 2" />
+      </g>
+      <circle cx="360" cy="440" r="4" style="fill: var(--bike-accent)" />
+    </g>
+
+    <!-- Front wheel -->
+    <g id="frontWheel">
+      <circle cx="640" cy="440" r="76" fill="none" style="stroke: var(--bike); stroke-width: 9" />
+      <circle cx="640" cy="440" r="68" fill="none" style="stroke: var(--bike-accent); stroke-width: 3" opacity="0.8" />
+      <circle cx="640" cy="440" r="8" style="fill: var(--bike)" />
+      <g id="frontSpokes" transform="rotate(0 640 440)">
+        <line x1="640" y1="372" x2="640" y2="508" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="572" y1="440" x2="708" y2="440" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="592" y1="392" x2="688" y2="488" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="592" y1="488" x2="688" y2="392" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="616" y1="378" x2="664" y2="502" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="616" y1="502" x2="664" y2="378" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="580" y1="414" x2="700" y2="466" style="stroke: var(--bike); stroke-width: 2" />
+        <line x1="580" y1="466" x2="700" y2="414" style="stroke: var(--bike); stroke-width: 2" />
+      </g>
+      <circle cx="640" cy="440" r="4" style="fill: var(--bike-accent)" />
+    </g>
+
+    <!-- Frame -->
+    <g id="frame" filter="url(#smallShadow)">
+      <path d="M 500 430 L 470 320 L 600 320 L 610 340 L 500 430" fill="none" style="stroke: var(--bike); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round" />
+      <path d="M 470 320 L 360 440" fill="none" style="stroke: var(--bike); stroke-width: 7; stroke-linecap: round" />
+      <path d="M 500 430 L 360 440" fill="none" style="stroke: var(--bike); stroke-width: 7; stroke-linecap: round" />
+      <path d="M 610 340 L 640 440" fill="none" style="stroke: var(--bike); stroke-width: 7; stroke-linecap: round" />
+      <path d="M 600 320 L 610 340" fill="none" style="stroke: var(--bike); stroke-width: 9; stroke-linecap: round" />
+      <path d="M 470 320 L 500 430" fill="none" style="stroke: var(--bike); stroke-width: 9; stroke-linecap: round" />
+      <path d="M 500 430 L 600 320" fill="none" style="stroke: var(--bike); stroke-width: 8; stroke-linecap: round" />
+    </g>
+
+    <!-- Chain -->
+    <path d="M 500 430 C 455 430 405 440 360 440" fill="none" style="stroke: #555; stroke-width: 3; stroke-dasharray: 5 4" opacity="0.8" />
+
+    <!-- Crankset -->
+    <g id="crank" transform="rotate(0 500 430)">
+      <circle cx="500" cy="430" r="24" fill="none" style="stroke: var(--bike); stroke-width: 5" />
+      <circle cx="500" cy="430" r="14" fill="none" style="stroke: var(--bike-accent); stroke-width: 3" />
+      <line x1="500" y1="430" x2="535" y2="430" style="stroke: var(--bike); stroke-width: 6; stroke-linecap: round" />
+      <line x1="500" y1="430" x2="465" y2="430" style="stroke: var(--bike); stroke-width: 6; stroke-linecap: round" />
+      <rect x="528" y="424" width="20" height="12" rx="4" style="fill: var(--bike-accent)" />
+      <rect x="452" y="424" width="20" height="12" rx="4" style="fill: var(--bike-accent)" />
+    </g>
+
+    <!-- Saddle -->
+    <path d="M 445 318 Q 470 305 495 318 Q 480 328 445 318 Z" style="fill: var(--bike); stroke: var(--bike-accent); stroke-width: 2" />
+    <path d="M 470 320 L 470 330" style="stroke: var(--bike); stroke-width: 5" />
+
+    <!-- Handlebars -->
+    <g id="handlebars">
+      <path d="M 600 320 L 610 300" fill="none" style="stroke: var(--bike); stroke-width: 6; stroke-linecap: round" />
+      <path d="M 585 292 Q 610 282 635 292" fill="none" style="stroke: var(--bike); stroke-width: 7; stroke-linecap: round" />
+      <path d="M 585 292 Q 580 300 585 308" fill="none" style="stroke: var(--bike-accent); stroke-width: 4; stroke-linecap: round" />
+      <path d="M 635 292 Q 640 300 635 308" fill="none" style="stroke: var(--bike-accent); stroke-width: 4; stroke-linecap: round" />
+    </g>
+  </g>
+
+  <!-- Pelican -->
+  <g id="pelican" transform="translate(0,0)">
+    <!-- Far leg (behind body) -->
+    <g id="farLeg">
+      <path id="farUpperLeg" d="M 460 330 L 470 380" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 14; stroke-linecap: round" />
+      <path id="farLowerLeg" d="M 470 380 L 500 430" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 12; stroke-linecap: round" />
+      <g id="farFoot" transform="translate(500,430) rotate(0)">
+        <path d="M -14 0 Q -6 -8 0 -2 L 8 -8 Q 12 -2 10 4 L 16 8 Q 8 12 0 8 L -8 12 Q -14 6 -14 0 Z" style="fill: var(--beak); stroke: var(--pelican-shadow); stroke-width: 2" />
+        <path d="M -10 2 L 0 4 M 0 4 L 10 2 M 0 4 L 4 10" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 1.5" />
+      </g>
+    </g>
+
+    <!-- Body -->
+    <g id="body" filter="url(#smallShadow)">
+      <ellipse cx="470" cy="270" rx="92" ry="66" style="fill: var(--pelican); stroke: var(--pelican-shadow); stroke-width: 3" />
+      <path d="M 390 260 Q 410 230 440 240 Q 430 270 400 280 Z" style="fill: var(--pelican-shadow); opacity: 0.35" />
+      <path d="M 430 220 Q 470 200 510 230" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2; opacity: 0.6" />
+      <path d="M 410 250 Q 450 235 490 255" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2; opacity: 0.5" />
+      <path d="M 430 290 Q 470 275 510 295" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2; opacity: 0.5" />
+      <path d="M 455 300 Q 480 315 505 300" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2; opacity="0.4" />
+    </g>
+
+    <!-- Tail feathers -->
+    <g id="tail">
+      <path d="M 385 285 Q 350 275 340 300 Q 370 300 390 295 Z" style="fill: var(--pelican); stroke: var(--pelican-shadow); stroke-width: 2" />
+      <path d="M 380 295 Q 345 300 340 325 Q 370 315 390 305 Z" style="fill: var(--pelican); stroke: var(--pelican-shadow); stroke-width: 2" />
+      <path d="M 390 305 Q 360 320 365 340 Q 390 325 405 315 Z" style="fill: var(--pelican); stroke: var(--pelican-shadow); stroke-width: 2" />
+    </g>
+
+    <!-- Neck -->
+    <path d="M 500 230 Q 530 180 560 190 Q 545 220 520 245 Z" style="fill: var(--pelican); stroke: var(--pelican-shadow); stroke-width: 3" />
+
+    <!-- Head -->
+    <g id="head">
+      <ellipse cx="560" cy="190" rx="42" ry="34" style="fill: var(--pelican); stroke: var(--pelican-shadow); stroke-width: 3" />
+      <path d="M 535 170 Q 560 155 585 175" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2; opacity="0.6" />
+    </g>
+
+    <!-- Beak -->
+    <g id="beak">
+      <path d="M 585 185 Q 640 172 690 195 Q 640 205 585 200 Z" style="fill: var(--beak); stroke: #b85c2a; stroke-width: 2" />
+      <path d="M 585 200 Q 640 205 690 195 Q 650 215 585 215 Z" style="fill: var(--beak); stroke: #b85c2a; stroke-width: 2" />
+      <path d="M 600 190 Q 640 190 675 195" fill="none" style="stroke: #b85c2a; stroke-width: 1.5; opacity="0.6" />
+    </g>
+
+    <!-- Gular pouch -->
+    <g id="pouch" transform="rotate(0 585 205)">
+      <path d="M 585 205 Q 620 230 660 215 Q 650 300 600 315 Q 570 300 575 250 Z" style="fill: var(--pouch); stroke: #c97b4a; stroke-width: 2.5" />
+      <path d="M 590 225 Q 620 250 645 230" fill="none" style="stroke: #c97b4a; stroke-width: 2; opacity="0.55" />
+      <path d="M 585 250 Q 610 270 635 250" fill="none" style="stroke: #c97b4a; stroke-width: 2; opacity="0.45" />
+      <path d="M 590 280 Q 610 295 625 280" fill="none" style="stroke: #c97b4a; stroke-width: 2; opacity="0.4" />
+    </g>
+
+    <!-- Eye -->
+    <g id="eye">
+      <ellipse cx="575" cy="178" rx="12" ry="11" style="fill: #fff; stroke: var(--pelican-shadow); stroke-width: 1.5" />
+      <circle cx="579" cy="180" r="5.5" style="fill: var(--eye)" />
+      <circle cx="581" cy="178" r="1.8" style="fill: #fff" />
+      <path d="M 562 168 Q 575 158 590 170" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2.5; stroke-linecap: round" />
+    </g>
+
+    <!-- Near wing holding handlebar -->
+    <g id="nearWing" transform="rotate(0 520 260)">
+      <path d="M 520 260 Q 560 245 610 295 Q 590 320 550 300 Q 520 290 520 260 Z" style="fill: var(--pelican); stroke: var(--pelican-shadow); stroke-width: 2.5" />
+      <path d="M 540 270 Q 570 270 600 295" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2; opacity="0.6" />
+      <path d="M 535 285 Q 565 285 590 305" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2; opacity="0.5" />
+      <path d="M 555 250 Q 575 260 590 280" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 1.5; opacity="0.5" />
+    </g>
+
+    <!-- Far wing (behind body) -->
+    <g id="farWing" transform="rotate(0 500 255)">
+      <path d="M 500 255 Q 545 235 600 285 Q 575 305 530 290 Q 505 280 500 255 Z" style="fill: var(--pelican-shadow); opacity="0.8" />
+      <path d="M 520 265 Q 555 265 585 285" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 2; opacity="0.5" />
+    </g>
+
+    <!-- Near leg (in front of body) -->
+    <g id="nearLeg">
+      <path id="nearUpperLeg" d="M 480 330 L 490 380" fill="none" style="stroke: var(--pelican); stroke-width: 15; stroke-linecap: round" />
+      <path id="nearLowerLeg" d="M 490 380 L 520 430" fill="none" style="stroke: var(--pelican); stroke-width: 13; stroke-linecap: round" />
+      <g id="nearFoot" transform="translate(520,430) rotate(0)">
+        <path d="M -14 0 Q -6 -8 0 -2 L 8 -8 Q 12 -2 10 4 L 16 8 Q 8 12 0 8 L -8 12 Q -14 6 -14 0 Z" style="fill: var(--beak); stroke: var(--pelican-shadow); stroke-width: 2" />
+        <path d="M -10 2 L 0 4 M 0 4 L 10 2 M 0 4 L 4 10" fill="none" style="stroke: var(--pelican-shadow); stroke-width: 1.5" />
+      </g>
+    </g>
+  </g>
+
+  <!-- Squawk / Catch Fish effect -->
+  <g id="squawkFx" style="display: none">
+    <g id="fish" transform="translate(620,300) rotate(0) scale(1)">
+      <path d="M -18 0 Q -8 -12 8 -8 Q 20 -4 22 0 Q 20 4 8 8 Q -8 12 -18 0 Z" style="fill: var(--fish); stroke: #b85c2a; stroke-width: 2" />
+      <path d="M -18 0 L -30 -10 L -26 0 L -30 10 Z" style="fill: var(--fish); stroke: #b85c2a; stroke-width: 2" />
+      <circle cx="10" cy="-2" r="3" style="fill: #222" />
+      <path d="M 2 -4 Q 8 -8 14 -4" fill="none" style="stroke: #b85c2a; stroke-width: 1.5" />
+    </g>
+
+    <g id="bubble" transform="translate(700,150) rotate(0) scale(1)">
+      <path d="M -55 -30 Q -55 -55 0 -55 Q 55 -55 55 -30 Q 55 -5 0 -5 Q -55 -5 -55 -30 Z" style="fill: var(--bubble); stroke: var(--controls-border); stroke-width: 3" />
+      <path d="M -18 -5 Q -28 12 -38 20 Q -20 14 -8 -2 Z" style="fill: var(--bubble); stroke: var(--controls-border); stroke-width: 3" />
+      <text x="0" y="-22" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="900" font-size="22" style="fill: var(--text)">SQUAWK!</text>
+    </g>
+  </g>
+
+  <!-- Foreground road detail -->
+  <g id="foregroundLines" transform="translate(0,0)">
+    <rect x="0" y="548" width="1000" height="3" style="fill: var(--road-line); opacity="0.25" />
+    <rect x="0" y="575" width="1000" height="2" style="fill: var(--road-line); opacity="0.18" />
+  </g>
+</svg>
+
+<div class="controls" role="region" aria-label="Animation controls">
+  <div class="control-group">
+    <span class="control-label">Speed</span>
+    <input id="speed" type="range" min="0.2" max="3.0" step="0.1" value="1.0" />
+    <span id="speedValue" class="speed-value">1.0x</span>
+  </div>
+
+  <div class="control-group">
+    <span class="control-label">Theme</span>
+    <button class="theme-btn active" data-theme="day" aria-pressed="true">Day</button>
+    <button class="theme-btn" data-theme="sunset" aria-pressed="false">Sunset</button>
+    <button class="theme-btn" data-theme="night" aria-pressed="false">Night</button>
+  </div>
+
+  <button id="squawkBtn" class="squawk-btn">Squawk / Catch Fish</button>
+</div>
+
+<script>
+  const svg = document.getElementById("scene");
+  const speedInput = document.getElementById("speed");
+  const speedValue = document.getElementById("speedValue");
+  const themeButtons = document.querySelectorAll(".theme-btn");
+  const squawkBtn = document.getElementById("squawkBtn");
+  const squawkFx = document.getElementById("squawkFx");
+  const fish = document.getElementById("fish");
+  const bubble = document.getElementById("bubble");
+
+  let speed = 1.0;
+  let t = 0;
+  let last = performance.now();
+  let squawkActive = false;
+  let squawkStart = 0;
+
+  const cloudGroups = document.querySelectorAll(".cloud");
+  const hillsFar = document.getElementById("hillsFar");
+  const hillsNear = document.getElementById("hillsNear");
+  const roadLines = document.getElementById("roadLines");
+  const foregroundLines = document.getElementById("foregroundLines");
+
+  const rearSpokes = document.getElementById("rearSpokes");
+  const frontSpokes = document.getElementById("frontSpokes");
+  const crank = document.getElementById("crank");
+  const pelican = document.getElementById("pelican");
+  const pouch = document.getElementById("pouch");
+  const nearWing = document.getElementById("nearWing");
+  const farWing = document.getElementById("farWing");
+
+  const nearUpperLeg = document.getElementById("nearUpperLeg");
+  const nearLowerLeg = document.getElementById("nearLowerLeg");
+  const nearFoot = document.getElementById("nearFoot");
+  const farUpperLeg = document.getElementById("farUpperLeg");
+  const farLowerLeg = document.getElementById("farLowerLeg");
+  const farFoot = document.getElementById("farFoot");
+
+  function setSpeed(value) {
+    speed = Math.max(0.2, Math.min(3.0, Number(value)));
+    speedValue.textContent = speed.toFixed(1) + "x";
+  }
+
+  speedInput.addEventListener("change", () => setSpeed(speedInput.value));
+
+  themeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const theme = btn.dataset.theme;
+      document.documentElement.setAttribute("data-theme", theme);
+      themeButtons.forEach((b) => {
+        const active = b.dataset.theme === theme;
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    });
+  });
+
+  squawkBtn.addEventListener("click", () => {
+    squawkActive = true;
+    squawkStart = t;
+    squawkFx.style.display = "block";
+  });
+
+  function legGeometry(hip, pedal, bend) {
+    const dx = pedal.x - hip.x;
+    const dy = pedal.y - hip.y;
+    const len = Math.hypot(dx, dy);
+    const ux = dx / len;
+    const uy = dy / len;
+    const knee = {
+      x: hip.x + ux * len * 0.55 + (-uy) * bend,
+      y: hip.y + uy * len * 0.55 + (ux) * bend
+    };
+    return { knee, ankle: pedal };
+  }
+
+  function setLegPaths(upper, lower, foot, hip, pedal, bend, footAngle) {
+    const { knee, ankle } = legGeometry(hip, pedal, bend);
+    upper.setAttribute("d", `M ${hip.x} ${hip.y} L ${knee.x} ${knee.y}`);
+    lower.setAttribute("d", `M ${knee.x} ${knee.y} L ${ankle.x} ${ankle.y}`);
+    foot.setAttribute("transform", `translate(${ankle.x} ${ankle.y}) rotate(${footAngle})`);
+  }
+
+  function animate(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    t += dt * speed;
+
+    const wheelAngle = t * 150;
+    rearSpokes.setAttribute("transform", `rotate(${wheelAngle} 360 440)`);
+    frontSpokes.setAttribute("transform", `rotate(${wheelAngle} 640 440)`);
+
+    const crankAngle = t * 2.0;
+    crank.setAttribute("transform", `rotate(${crankAngle * 180 / Math.PI} 500 430)`);
+
+    const bob = Math.sin(t * 2.2) * 2.5;
+    pelican.setAttribute("transform", `translate(0 ${bob})`);
+
+    const pouchAngle = Math.sin(t * 3.0) * 4 + (squawkActive ? Math.sin(t * 8) * 3 : 0);
+    pouch.setAttribute("transform", `rotate(${pouchAngle} 585 205)`);
+
+    const wingAngle = Math.sin(t * 4.0) * 5;
+    nearWing.setAttribute("transform", `rotate(${wingAngle} 520 260)`);
+    farWing.setAttribute("transform", `rotate(${wingAngle * 0.6} 500 255)`);
+
+    const pedalRadius = 35;
+    const bb = { x: 500, y: 430 };
+    const pedalA = {
+      x: bb.x + pedalRadius * Math.cos(crankAngle),
+      y: bb.y + pedalRadius * Math.sin(crankAngle)
+    };
+    const pedalB = {
+      x: bb.x + pedalRadius * Math.cos(crankAngle + Math.PI),
+      y: bb.y + pedalRadius * Math.sin(crankAngle + Math.PI)
+    };
+
+    const nearHip = { x: 480, y: 330 + bob };
+    const farHip = { x: 460, y: 330 + bob };
+
+    setLegPaths(nearUpperLeg, nearLowerLeg, nearFoot, nearHip, pedalA, 12, 0);
+    setLegPaths(farUpperLeg, farLowerLeg, farFoot, farHip, pedalB, -10, 0);
+
+    cloudGroups.forEach((cloud, i) => {
+      const baseX = Number(cloud.dataset.baseX);
+      const baseY = Number(cloud.dataset.baseY);
+      const x = ((baseX - t * 22) % 1000 + 1000) % 1000;
+      cloud.setAttribute("transform", `translate(${x} ${baseY})`);
+    });
+
+    const farShift = -((t * 8) % 1000);
+    const nearShift = -((t * 14) % 1000);
+    hillsFar.setAttribute("transform", `translate(${farShift} 0)`);
+    hillsNear.setAttribute("transform", `translate(${nearShift} 0)`);
+
+    const roadShift = -((t * 55) % 1000);
+    roadLines.setAttribute("transform", `translate(${roadShift} 0)`);
+    foregroundLines.setAttribute("transform", `translate(${roadShift * 0.7} 0)`);
+
+    if (squawkActive) {
+      const age = t - squawkStart;
+      if (age > 1.8) {
+        squawkActive = false;
+        squawkFx.style.display = "none";
+      } else {
+        const progress = age / 1.8;
+        const fishX = 620 + Math.sin(progress * Math.PI) * 42;
+        const fishY = 300 - progress * 100 - Math.sin(progress * Math.PI) * 18;
+        const fishRot = -18 + Math.sin(progress * Math.PI) * 22;
+        const fishScale = 1 - progress * 0.15;
+        fish.setAttribute(
+          "transform",
+          `translate(${fishX} ${fishY}) rotate(${fishRot}) scale(${fishScale})`
+        );
+
+        const bubbleScale = 1 + Math.sin(age * 10) * 0.06;
+        const bubbleRot = Math.sin(age * 6) * 4;
+        bubble.setAttribute(
+          "transform",
+          `translate(700 150) rotate(${bubbleRot}) scale(${bubbleScale})`
+        );
+      }
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+</script>
+</body>
+</html>
