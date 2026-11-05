@@ -8,13 +8,14 @@
 
 ```text
 scripts/deepseek_g4/
-├── fast_start_g4.sh                         # 一键启动 / 多变体热切换 / Caddy 双模鉴权 / 状态巡检 / 释放算力
+├── fast_start_g4.sh                         # 一键启动 / 10 分钟防休眠保活 / 多变体热切换 / Caddy 双模鉴权 / 释放算力
 ├── step1_cpu_download_to_drive.py           # [0 CCU/h 免费 CPU] 预下载两套 2-bit 主干分片 + 128KB Engram 稀疏头至 Google Drive
 ├── step2_g4_build_engines.sh                # [首次 G4] 编译 sm_120a 原生 Delta Engine + llama.cpp 并打包 2 秒解压归档
 ├── step3_g4_hybrid_stage_and_benchmark.py   # [G4 核心调度] 64 并发 Drive-v3/HF 直灌 Gen5 NVMe + 三级内存锁定 + OpenAI/Caddy 网关
 ├── run_pelican_benchmark.py                 # Simon Willison「鹈鹕骑自行车」交互式 SVG+JS 基准测试脚本
 └── examples/
-    ├── pelican_ista_coder_engram.html       # [推荐·方案一] ISTA-DASLab GSQ-RCO-Coder (72.1GB 全显存) + 110.6GB 完整 Engram (全内存) 直出零错字版（686 行，54.63 tok/s）
+    ├── pelican_ista_coder_engram.html       # [推荐·方案一] ISTA-DASLab GSQ-RCO-Coder (72.1GB 全显存) + 110.6GB 完整 Engram (全内存) 未修复直出原始版（686 行，0 拼写错误，54.63 tok/s）
+    ├── pelican_ista_coder_engram_fixed.html # [方案一·微调版] 修复 3 处 SVG 几何坐标与弧线反转后的满血动画版
     ├── pelican_ud_iq2xxs.html               # Unsloth UD-IQ2_XXS 单次直出原始版（含 Engram 置零导致的 <ellips 与 76px 喉囊狂抖现场）
     ├── pelican_ud_iq2xxs_fixed.html         # Unsloth UD-IQ2_XXS 修复拼写与重复 transform-origin 后的满血复原版（883 行）
     └── pelican_abiray_iq2xxs.html           # Abiray Uncensored GSQ-RCO IQ2_XXS 单次直出无删减赛博日落风版本（639 行）
@@ -50,13 +51,19 @@ python3 scripts/deepseek_g4/step1_cpu_download_to_drive.py --variant both --engr
 ./scripts/deepseek_g4/fast_start_g4.sh switch abiray-gsq-iq2xxs
 ```
 
-### 4. 状态巡检与下班关机（`0.00 CCU/h`）
+### 4. 10 分钟防休眠保活、状态巡检与下班关机（`0.00 CCU/h`）
+
+> **💡 为什么需要 `keepalive`？**
+> 当通过 Cloudflare Tunnel + API Key（Cherry Studio / Cursor）调用模型时，所有推理流量直接走隧道进入后台 `:18150 -> :8150` 端口，完全绕过了 Colab 的 Jupyter 内核 (`ipykernel`)。若连续 30~60 分钟无 `colab exec` 内核交互，Colab 后台看门狗会误判为空闲并强制回收实例。`fast_start_g4.sh` 在 `start` 时会自动在本地后台挂载 **10 分钟防休眠心跳进程 (`colab_keepalive_<session>`)**，并在 `stop` 时自动销毁。
 
 ```bash
-# 查看本地隧道、模型健康度与 CCU 实时账单
+# 查看本地保活进程状态、公网网关健康度与 GPU 实时监控
 ./scripts/deepseek_g4/fast_start_g4.sh status
 
-# 断开隧道并提示销毁 G4 会话，回归 0.00 CCU/h
+# 为已运行的 Colab 会话单独补挂/重启本地 10 分钟防休眠心跳守护进程
+./scripts/deepseek_g4/fast_start_g4.sh keepalive -s ds_g4
+
+# 自动停止本地保活守护进程并销毁 G4 会话，回归 0.00 CCU/h
 ./scripts/deepseek_g4/fast_start_g4.sh stop
 ```
 
@@ -64,4 +71,5 @@ python3 scripts/deepseek_g4/step1_cpu_download_to_drive.py --variant both --engr
 
 ## 📖 完整技术白皮书与实测报告
 
-详见仓库文档：[`references/deepseek_v41_748b_g4_guide.md`](../../references/deepseek_v41_748b_g4_guide.md)。
+- 第三弹（双模型网关与 Engram 置零实证）：[`references/deepseek_v41_748b_g4_guide.md`](../../references/deepseek_v41_748b_g4_guide.md)
+- 第四弹（72.1GB 全显存 + 110.6GB 完整 Engram 四大版本终极横评 & Caddy 双模鉴权）：[`references/deepseek_v41_g4_ep4_full_engram_guide.md`](../../references/deepseek_v41_g4_ep4_full_engram_guide.md)

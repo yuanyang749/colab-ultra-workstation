@@ -68,10 +68,13 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
    - **`colab-mcp` 网页模式**：运行 `python3 scripts/mcp_dfs_mount.py` 生成载荷执行，挂载成功后立即运行 `python3 scripts/mcp_dfs_mount.py --sanitize` 擦除单元格中的明文 Token。
    - **路径兼容**：自动建立软链接 `os.symlink("/content/drive/My Drive", "/content/drive/MyDrive")`。
 
-3. **跨档位通用防浪费三原则（Zero-Burn Core Rules）**：
+3. **跨档位通用防浪费与防断连四原则（Zero-Burn & Anti-Idle Core Rules）**：
    - **本地 `0 CCU` 备料**：所有提示词编排、配置修改与首帧素材准备必须在启动高价 GPU 前在本地完成。
    - **严禁在 FUSE 云盘路径直接 `mmap` 大模型**：FUSE 随机读仅 `~25 MB/s` 且受 `112 GiB` 缓存上限限制；必须通过并发 Google Drive v3 API 或 HuggingFace CDN 将核心权重直灌本地 NVMe SSD（`/content/fast_*`）。
    - **长耗时任务强制 `nohup` 脱机启动**：超过 15 秒的远程任务一律用 `nohup ... > /tmp/task.log 2>&1 &` 后台拉起，再用 `alarm` 超时轮询日志，防止 WebSocket 断连卡死。
+   - **API / 隧道常驻服务强制挂载「10 分钟 Jupyter 内核防休眠保活守护进程 (`colab_keepalive_<session>`)」**：
+     - **底层断连根因**：使用 Cloudflare Tunnel + API Key（Cherry Studio / Cursor / CLI）调用模型时，所有推理请求均直接走隧道进入后台 C++/Python 端口（`:18150 -> :8150`），**完全绕过了 Colab 的 Jupyter 内核 (`ipykernel`)**。Google Colab 后台看门狗仅检测 **Jupyter 内核是否收到 `colab exec` 指令**；若连续 **30~60 分钟**无内核交互，即使 GPU 满载吐字，Colab 也会误判为空闲并强制回收实例（导致“一上午断两三次”）。
+     - **标准根治方案**：[`scripts/deepseek_g4/fast_start_g4.sh`](scripts/deepseek_g4/fast_start_g4.sh) 在 `start` / `tunnel` / `keepalive` 时会自动在本地后台拉起 `colab_keepalive_<session>` 守护进程，每 **10 分钟 (`600s`)** 向远端 Jupyter 内核发送一次轻量级 `echo "1" | colab exec -s <session>` 心跳握手，并在执行 `stop` 时自动杀死保活进程并释放 GPU。
 
 4. **关机落盘核验与强制双轨 CCU 结算报告**：
    - **关机前防丢失核验**：向 `/content/drive` 写入大文件后，销毁实例前必须通过 Google Drive v3 API (`files.list`) 确认云端 `size > 0`。
