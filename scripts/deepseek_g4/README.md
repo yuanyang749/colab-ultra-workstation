@@ -39,6 +39,9 @@ python3 scripts/deepseek_g4/step1_cpu_download_to_drive.py --variant both --engr
 # 方案一（代码首选，挂载完整 110.6GB Engram，0 拼写错误，54.63 tok/s）
 ./scripts/deepseek_g4/fast_start_g4.sh start --variant ista-coder-iq2xxs
 
+# 方案一 + 开启原生 BF16 视觉多模态（自动挂载 972.2MB mmproj-BF16.gguf，支持发图/UI截图转代码）
+./scripts/deepseek_g4/fast_start_g4.sh start --variant ista-coder-iq2xxs --vision
+
 # 全专家方案（Unsloth V3.1 UD-IQ2_XXS 或 Abiray GSQ-RCO IQ2_XXS）
 ./scripts/deepseek_g4/fast_start_g4.sh start --variant unsloth-ud-iq2xxs
 ```

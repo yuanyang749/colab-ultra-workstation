@@ -127,12 +127,14 @@
 - **用客户端调 API 时（`deepseek HARNESS` / Cursor / Cherry Studio）**：和之前一模一样，继续校验你配好的 `Authorization: Bearer sk-g4-...` 密钥，一行客户端配置都不用改；
 - **用浏览器直接打开公网域名看 Web 面板时**：自动弹出 HTTP Basic Auth 密码框，输对一次密码就自动在浏览器种下 `HttpOnly` 的 `ct_session` Cookie，完美兼顾了 API 客户端和浏览器 Web UI！
 
-### 2. 联动 `colabllm` CLI：一键召唤多模态视觉模型与 ComfyUI
-大家知道，`DeepSeek-V4.1-Flash-1017` 是一个纯文本大模型，平时让它根据设计稿写前端或者看报错截图时，它自己是没法直接看图的。
+### 2. 开启原生 `mmproj-BF16` 视觉看图模式 & 联动 `colabllm` 多模态全家桶
+很多人不知道，**`DeepSeek-V4.1-Flash-1017` 原生就是一颗图文多模态大模型（`image-text-to-text`，在 BabyVision 视觉榜高达 92.5 分）**，三大 GGUF 仓库里都自带了一颗 **`972.2 MB`（`0.91 GiB`）的 `mmproj-DeepSeek-V4.1-Flash-1017-BF16.gguf` 满血视觉投影头**！
+- **为什么平时默认是纯文本？** 因为我们冲刺 `54.6 tok/s` 极速用的 `Delta` 专用引擎目前只跑纯文本主干；
+- **怎么一键开启原生看图写代码（`--vision`）？** 我们在 [`step3_g4_hybrid_stage_and_benchmark.py`](file:///Users/delroy/Documents/Playground/test001/colab-ultra-workstation/scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py) 与 [`fast_start_g4.sh`](file:///Users/delroy/Documents/Playground/test001/colab-ultra-workstation/scripts/deepseek_g4/fast_start_g4.sh) 中内置了自动拉取并挂载 `972.2 MB` `mmproj-BF16.gguf` 的 `--vision` 模式！特别是配合**方案一（`72.12 GB` 主干）**，加上这颗 `0.91 GiB` 的 `BF16` 视觉编码器后总显存也才 **`70.4 GiB`**——在单张 96GB G4 上依然能 **100% 全显存装下「主干 + 原生视觉头」+ 100% 全内存装下「110.6GB 完整 Engram」**，直接在 Cherry Studio / Cursor 里把 UI 设计稿截图或报错截图甩给它就能还原前端代码！
 
-刚好我们这次把 [`deluxebear/colabllm`](https://github.com/deluxebear/colabllm) CLI（`0.1.2`）正式整合进了我们的云端工作站体系里。除了用我们自己的极速引擎跑 748B DeepSeek 之外，你还可以直接用 `colabllm` 一键在云端拉起：
-- **多模态视觉 + 800K 超长上下文**：`colabllm llm start --preset qwen3.8-flash-next`（支持直接看图识 UI、读设计稿，再把结构化描述喂给 DeepSeek-V4.1 写代码）；
-- **OCR / 语音克隆 / 视频工作流**：内置 `paddleocr`、`glm-ocr`、`voxcpm`、`cosyvoice` 以及 `comfyui`，并且全部复用同一套 `google-colab-cli` + `colab-dfs-ext` 云盘静默挂载底座。
+与此同时，我们还把 [`deluxebear/colabllm`](https://github.com/deluxebear/colabllm) CLI（`0.1.2`）正式整合进了云端工作站体系里。你还可以直接用 `colabllm` 一键在云端拉起：
+- **800K 超长上下文 + 视觉**：`colabllm qwen-flash up`（基于 `Qwen3.8-Flash-Next` + `BF16 mmproj`，适合 80 万 Token 级超长文档与多图混合审阅）；
+- **批量 PDF/图片 OCR、语音克隆与视频工作流**：内置 `unlimited-ocr`、`qwen3-tts`、`indextts`、`openjutsu` 以及 `comfyui`，全部复用同一套 `google-colab-cli` + `colab-dfs-ext` 云盘静默挂载底座。
 
 ---
 
@@ -153,20 +155,25 @@
    - **优势**：原生去审查权重，不跟你说教，主机内存占用最轻（`51.48 tok/s`）。
 
 ```bash
-# 1. 一键启动【方案一：72.1GB Coder 全显存 + 110.6GB 满血 Engram 全内存】（默认开启 Caddy 鉴权 + 固定隧道）
+# 1. 一键启动【方案一：72.1GB Coder 全显存 + 110.6GB 满血 Engram 全内存】（默认 54.6 tok/s 极速模式 + 10 分钟防断连保活）
 ./scripts/deepseek_g4/fast_start_g4.sh start \
-  --variant ista-coder-engram \
-  --auth-caddy --auth-token "sk-my-secret-token"
+  --variant ista-coder-iq2xxs \
+  --auth-caddy
+
+# 1b. 开启原生看图多模态【72.1GB 主干 + 972MB BF16 视觉头全显存 + 110.6GB Engram 全内存】（支持直接传图/看 UI 截图写代码）
+./scripts/deepseek_g4/fast_start_g4.sh start \
+  --variant ista-coder-iq2xxs \
+  --vision --auth-caddy
 
 # 2. 在三大版本之间随时一键无缝切换（桌面客户端无需改任何配置）
-./scripts/deepseek_g4/fast_start_g4.sh switch --variant ista-coder-engram
+./scripts/deepseek_g4/fast_start_g4.sh switch --variant ista-coder-iq2xxs
 ./scripts/deepseek_g4/fast_start_g4.sh switch --variant unsloth-ud-iq2xxs
 ./scripts/deepseek_g4/fast_start_g4.sh switch --variant abiray-gsq-iq2xxs
 
-# 3. 随时查看 G4 显存占用、网关状态与实时 CCU 消耗速率
+# 3. 随时查看 G4 显存占用、10 分钟保活状态与网关健康度
 ./scripts/deepseek_g4/fast_start_g4.sh status
 
-# 4. 用完即走：一键停机释放当前会话 GPU，确保闲置时 0.00 CCU/h
+# 4. 用完即走：一键停机并自动关闭保活进程，确保闲置时 0.00 CCU/h
 ./scripts/deepseek_g4/fast_start_g4.sh stop
 ```
 

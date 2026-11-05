@@ -39,6 +39,7 @@ VARIANTS = {
             "DeepSeek-V4.1-Flash-1017-UD-IQ2_XXS-00005-of-00006.gguf",  # 16.42 GB (Total backbone: 165.30 GB / 153.96 GiB)
         ],
         "shard_engram": "DeepSeek-V4.1-Flash-1017-UD-IQ2_XXS-00006-of-00006.gguf",  # 110.60 GB logical (sparse header)
+        "mmproj_file": "mmproj-BF16.gguf",  # 972.2 MB (0.91 GiB) native BF16 Vision Projector
         "model_name": "deepseek-v4.1-flash-1017-uncensored-gsq-rco-iq2_xxs",
         "display_name": "DeepSeek V4.1 Flash · Unsloth Dynamic V3.1 UD-IQ2_XXS (G4 96GB Blackwell)",
         "is_gsq_4shard": False,
@@ -55,6 +56,7 @@ VARIANTS = {
             "DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ2_XXS-00004-of-00004.gguf",  # 20.87 GB (Total backbone: 138.59 GB / 129.07 GiB)
         ],
         "shard_engram": "DeepSeek-V4.1-Flash-Engram-IQ4_NL.gguf",  # 110.60 GB logical (sparse header)
+        "mmproj_file": "mmproj-DeepSeek-V4.1-Flash-1017-BF16.gguf",  # 972.2 MB (0.91 GiB) native BF16 Vision Projector
         "model_name": "deepseek-v4.1-flash-1017-uncensored-gsq-rco-iq2_xxs",
         "display_name": "DeepSeek V4.1 Flash Uncensored · Abiray GSQ-RCO IQ2_XXS (G4 96GB Blackwell)",
         "is_gsq_4shard": True,
@@ -73,6 +75,7 @@ VARIANTS = {
         ],
         "shard_engram": "DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-IQ2_XXS-00006-of-00006.gguf",
         "hf_engram_path": "DeepSeek-V4.1-Flash-Engram-IQ4_NL.gguf",  # 110.60 GB / 103.00 GiB full IQ4_NL Engram -> 100% in 188GB DDR5 Page Cache!
+        "mmproj_file": "mmproj-DeepSeek-V4.1-Flash-1017-BF16.gguf",  # 972.2 MB (0.91 GiB) native BF16 Vision Projector
         "full_engram": True,
         "omit_rank": True,
         "model_name": "deepseek-v4.1-flash-1017-uncensored-gsq-rco-iq2_xxs",
@@ -144,9 +147,19 @@ def _lookup_drive_file(shard_name, token):
 
 
 def _lookup_hf_file(repo, hf_prefix, shard_name):
-    """Return (resolved_cdn_url, size_bytes) from Hugging Face Hub."""
+    """Return (resolved_cdn_url, size_bytes) from Hugging Face Hub (uses HF_TOKEN if present for higher rate/speed limits)."""
     url = f"https://huggingface.co/{repo}/resolve/main/{hf_prefix}{shard_name}"
-    req = urllib.request.Request(url, method="HEAD")
+    headers = {}
+    hf_tok = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if not hf_tok:
+        for p in ("/content/drive/MyDrive/colab-llm/hf_token.txt", "/root/.cache/huggingface/token"):
+            if os.path.isfile(p):
+                hf_tok = open(p).read().strip()
+                if hf_tok:
+                    break
+    if hf_tok:
+        headers["Authorization"] = f"Bearer {hf_tok}"
+    req = urllib.request.Request(url, method="HEAD", headers=headers)
     with urllib.request.urlopen(req, timeout=15) as resp:
         cl = resp.headers.get("X-Linked-Size") or resp.headers.get("Content-Length") or "0"
         return resp.url, int(cl)
@@ -327,6 +340,65 @@ def stage_hybrid_layout(variant_key="unsloth-ud-iq2xxs"):
     if os.path.exists(dspark_src) and not os.path.exists(dspark_dst):
         print("  [COPYING DSpark Drafter -> NVMe] V41-1017-MTP-iq2xxs.gguf (4.22 GB)...")
         shutil.copyfile(dspark_src, dspark_dst)
+
+    # Stage 972.2 MB BF16 Multimodal Vision Projector (mmproj) onto NVMe (Drive v3 API or HF CDN)
+    mmproj_name = v.get("mmproj_file", "mmproj-DeepSeek-V4.1-Flash-1017-BF16.gguf")
+    mmproj_dst = os.path.join(FAST_DIR, "mmproj-DeepSeek-V4.1-Flash-1017-BF16.gguf")
+    if not os.path.exists(mmproj_dst) or os.path.getsize(mmproj_dst) < 900_000_000:
+        mm_id, mm_sz = _lookup_drive_file(mmproj_name, token)
+        if not mm_id and mmproj_name != "mmproj-BF16.gguf":
+            mm_id, mm_sz = _lookup_drive_file("mmproj-BF16.gguf", token)
+        mm_url = None
+        if not mm_id:
+            try:
+                mm_url, mm_sz = _lookup_hf_file(v["repo"], "", mmproj_name)
+            except Exception as e:
+                print(f"  [MMPROJ NOTE] Could not resolve {mmproj_name}: {e}", flush=True)
+                mm_sz = 0
+        if mm_sz > 0:
+            t_mm0 = time.time()
+            src_mm = "DRIVE-v3" if mm_id else "HF-HUB"
+            print(f"  [VISION MMPROJ {src_mm} -> NVMe] {mmproj_name} ({mm_sz/1e6:.1f} MB)...", flush=True)
+            tmp_mm = mmproj_dst + ".part"
+            fd_mm = os.open(tmp_mm, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o644)
+            os.ftruncate(fd_mm, mm_sz)
+            mm_ranges = []
+            off = 0
+            while off < mm_sz:
+                end = min(off + chunk_bytes - 1, mm_sz - 1)
+                mm_ranges.append((off, end))
+                off = end + 1
+
+            def _fetch_mm_chunk(rng):
+                s_off, e_off = rng
+                for attempt in range(4):
+                    try:
+                        if mm_id:
+                            cur_tok = token if attempt == 0 else _get_colab_drive_token()
+                            req = urllib.request.Request(
+                                f"https://www.googleapis.com/drive/v3/files/{mm_id}?alt=media",
+                                headers={"Authorization": f"Bearer {cur_tok}", "Range": f"bytes={s_off}-{e_off}"},
+                            )
+                        else:
+                            req = urllib.request.Request(mm_url, headers={"Range": f"bytes={s_off}-{e_off}"})
+                        with urllib.request.urlopen(req, timeout=60) as resp:
+                            buf = resp.read()
+                        os.pwrite(fd_mm, buf, s_off)
+                        return len(buf)
+                    except Exception:
+                        if attempt == 3:
+                            raise
+                        time.sleep(0.5 * (attempt + 1))
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=16) as mm_ex:
+                list(mm_ex.map(_fetch_mm_chunk, mm_ranges))
+            os.close(fd_mm)
+            os.rename(tmp_mm, mmproj_dst)
+            dt_mm = max(0.1, time.time() - t_mm0)
+            print(f"  [VISION MMPROJ READY] {mmproj_dst} ({mm_sz/1e6:.1f} MB in {dt_mm:.1f}s = {mm_sz/1e6/dt_mm:.0f} MB/s)", flush=True)
+    else:
+        print(f"  [VISION MMPROJ READY] {mmproj_dst} ({os.path.getsize(mmproj_dst)/1e6:.1f} MB)", flush=True)
+    v["mmproj_local_path"] = mmproj_dst if os.path.exists(mmproj_dst) else None
 
     first_shard = os.path.join(fast_v_dir, v["shards_nvme"][0])
     if v.get("full_engram") and os.path.exists(first_shard):
@@ -761,8 +833,14 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["stage-only", "delta", "llamacpp-cpu", "llamacpp-hybrid"],
+        choices=["stage-only", "delta", "llamacpp-vision", "llamacpp-hybrid", "llamacpp-cpu"],
         default="stage-only",
+    )
+    parser.add_argument(
+        "--vision",
+        action="store_true",
+        default=False,
+        help="Switch to llama-server with --mmproj (BF16 972.2MB Vision Projector) enabled for image+text inputs",
     )
     parser.add_argument("--ctx", type=int, default=131072)
     parser.add_argument("--port", type=int, default=8150)
@@ -809,6 +887,9 @@ def main():
         help="Cloudflare Named Tunnel token (or set CT_TUNNEL_TOKEN / CF_TUNNEL_TOKEN)",
     )
     args = parser.parse_args()
+    if args.vision and args.mode == "delta":
+        print("  [VISION MODE] Switching engine from 'delta' to 'llamacpp-vision' to enable --mmproj BF16 image inputs!", flush=True)
+        args.mode = "llamacpp-vision"
 
     first_shard, engram_dst, v = stage_hybrid_layout(args.variant)
     cfg_path = build_delta_g4_config(
@@ -874,14 +955,24 @@ def main():
         print("Launching Delta Server:", " ".join(cmd))
         os.execvp(cmd[0], cmd)
 
-    elif args.mode in ("llamacpp-cpu", "llamacpp-hybrid"):
+    elif args.mode in ("llamacpp-vision", "llamacpp-cpu", "llamacpp-hybrid"):
         if v["is_gsq_4shard"]:
             first_shard = ensure_llamacpp_6shard_layout(os.path.dirname(first_shard), engram_dst)
-        ot_moe = ".ffn_.*_exps.=CPU" if args.mode == "llamacpp-cpu" else r"blk\.(2[6-9]|3[0-9])\.ffn_.*_exps\.=CPU"
+        subprocess.run(["fuser", "-k", f"{args.port}/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.5)
+        if args.auth_caddy or args.tunnel or args.tunnel_token or os.environ.get("CT_TUNNEL_TOKEN"):
+            start_caddy_auth_and_tunnel(
+                service_port=args.port,
+                public_port=args.public_port,
+                tunnel_mode=args.tunnel,
+                tunnel_token=args.tunnel_token,
+            )
         cmd = [
             "/content/engines/bin/llama-server",
             "--model",
             first_shard,
+            "--alias",
+            v["model_name"],
             "--ctx-size",
             str(args.ctx),
             "-ngl",
@@ -892,8 +983,17 @@ def main():
             "on",
             "--override-tensor",
             "per_layer_token_embd.weight=CPU",
-            "-ot",
-            ot_moe,
+        ]
+        # For 72.12 GB ISTA-DASLab Coder, 100% of all 40 MoE layers + 972MB mmproj fit inside 96GB GDDR7 VRAM!
+        if args.mode == "llamacpp-cpu":
+            cmd.extend(["-ot", ".ffn_.*_exps.=CPU"])
+        elif not v.get("full_engram"):
+            cmd.extend(["-ot", r"blk\.(2[6-9]|3[0-9])\.ffn_.*_exps\.=CPU"])
+        mmproj_path = v.get("mmproj_local_path")
+        if mmproj_path and os.path.exists(mmproj_path):
+            cmd.extend(["--mmproj", mmproj_path])
+            print(f"  [VISION ENABLED] Mounting BF16 Vision Projector: {mmproj_path}", flush=True)
+        cmd.extend([
             "--cache-type-k",
             "q4_0",
             "--cache-type-v",
@@ -914,7 +1014,7 @@ def main():
             "24",
             "--port",
             str(args.port),
-        ]
+        ])
         print(f"Launching llama-server ({args.mode}):", " ".join(cmd))
         os.execvp(cmd[0], cmd)
 

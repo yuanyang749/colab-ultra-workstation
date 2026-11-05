@@ -144,6 +144,23 @@ def download_shared_sidecars():
     else:
         print(f"\n[SKIP] DSpark MTP Drafter already present at {dspark_dst}", flush=True)
 
+    mmproj_dst = os.path.join(DRIVE_V41_DIR, "mmproj-DeepSeek-V4.1-Flash-1017-BF16.gguf")
+    if not os.path.exists(mmproj_dst) or os.path.getsize(mmproj_dst) < 900_000_000:
+        print("\n=== Downloading Native BF16 Vision Projector (mmproj, 972.2 MB) ===", flush=True)
+        subprocess.run(
+            [
+                "hf",
+                "download",
+                "ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF",
+                "mmproj-DeepSeek-V4.1-Flash-1017-BF16.gguf",
+                "--local-dir",
+                DRIVE_V41_DIR,
+            ],
+            check=True,
+        )
+    else:
+        print(f"\n[SKIP] BF16 Vision Projector already present at {mmproj_dst}", flush=True)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Step 1: Zero-CCU CPU Download of DeepSeek-V4.1-Flash 2-bit GGUF Shards to Google Drive")

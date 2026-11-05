@@ -69,8 +69,8 @@ stop_keepalive_daemon() {
 usage() {
   cat <<EOF
 Usage:
-  $(basename "$0") start [--variant ista-coder-iq2xxs|unsloth-ud-iq2xxs|abiray-gsq-iq2xxs] [--quality exact|turbo] [--ctx 131072] [--auth-caddy]
-  $(basename "$0") switch [--variant ista-coder-iq2xxs|unsloth-ud-iq2xxs|abiray-gsq-iq2xxs] [--quality exact|turbo] [--ctx 131072] [--auth-caddy]
+  $(basename "$0") start [--variant ista-coder-iq2xxs|unsloth-ud-iq2xxs|abiray-gsq-iq2xxs] [--vision] [--quality exact|turbo] [--ctx 131072] [--auth-caddy]
+  $(basename "$0") switch [--variant ista-coder-iq2xxs|unsloth-ud-iq2xxs|abiray-gsq-iq2xxs] [--vision] [--quality exact|turbo] [--ctx 131072] [--auth-caddy]
   $(basename "$0") tunnel [--port 8150]                                       # Attach Protected HTTPS Gateway to any running model on G4
   $(basename "$0") keepalive [--session ds_g4]                                # Start/restart local 10-min Jupyter anti-idle heartbeat daemon
   $(basename "$0") key [--rotate]                                             # Show (in your terminal) or rotate your secret API Key
@@ -92,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     --quality|--quality-mode|-q) QUALITY_MODE="$2"; shift 2 ;;
     --ctx)        CTX_SIZE="$2"; shift 2 ;;
     --port|-p)    PORT="$2"; GATE_PORT="$((PORT + 10000))"; shift 2 ;;
+    --vision|--mmproj) EXTRA_ARGS+=("--vision"); shift ;;
     --auth-caddy) EXTRA_ARGS+=("--auth-caddy"); shift ;;
     --tunnel)     EXTRA_ARGS+=("--tunnel" "${2:-quick}"); shift 2 ;;
     --rotate)     ROTATE_KEY=1; shift ;;
