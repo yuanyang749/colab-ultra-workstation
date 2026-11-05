@@ -93,6 +93,7 @@ while [[ $# -gt 0 ]]; do
     --ctx)        CTX_SIZE="$2"; shift 2 ;;
     --port|-p)    PORT="$2"; GATE_PORT="$((PORT + 10000))"; shift 2 ;;
     --vision|--mmproj) EXTRA_ARGS+=("--vision"); shift ;;
+    --sparse-engram) EXTRA_ARGS+=("--sparse-engram"); shift ;;
     --auth-caddy) EXTRA_ARGS+=("--auth-caddy"); shift ;;
     --tunnel)     EXTRA_ARGS+=("--tunnel" "${2:-quick}"); shift 2 ;;
     --rotate)     ROTATE_KEY=1; shift ;;

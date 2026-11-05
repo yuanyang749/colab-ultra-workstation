@@ -165,7 +165,44 @@ def _lookup_hf_file(repo, hf_prefix, shard_name):
         return resp.url, int(cl)
 
 
-def stage_hybrid_layout(variant_key="unsloth-ud-iq2xxs"):
+def ensure_mainline_llamacpp_b12128():
+    """
+    Ensure mainline llama.cpp (b12128+, CUDA 13.4 x64 with PR #31086 DSV4.1 + deepseek4v vision)
+    is unpacked at /content/engines/llama_b12128/llama-server and cached on Google Drive.
+    """
+    target_dir = "/content/engines/llama_b12128"
+    for cand in (
+        os.path.join(target_dir, "llama-server"),
+        os.path.join(target_dir, "build/bin/llama-server"),
+        os.path.join(target_dir, "bin/llama-server"),
+    ):
+        if os.path.exists(cand):
+            return cand
+    os.makedirs(target_dir, exist_ok=True)
+    drive_tar = os.path.join(DRIVE_V41_DIR, "bin/llama-b12128-bin-ubuntu-cuda-13.4-x64.tar.gz")
+    local_tar = "/tmp/llama-b12128-bin-ubuntu-cuda-13.4-x64.tar.gz"
+    if os.path.exists(drive_tar) and os.path.getsize(drive_tar) > 50_000_000:
+        shutil.copyfile(drive_tar, local_tar)
+    else:
+        url = "https://github.com/ggml-org/llama.cpp/releases/download/b12128/llama-b12128-bin-ubuntu-cuda-13.4-x64.tar.gz"
+        print(f"=== Downloading mainline llama.cpp b12128 CUDA 13.4 binary (~170 MB) ===", flush=True)
+        with urllib.request.urlopen(url, timeout=120) as r, open(local_tar, "wb") as f:
+            shutil.copyfileobj(r, f)
+        if os.path.exists(os.path.dirname(drive_tar)):
+            try:
+                shutil.copyfile(local_tar, drive_tar)
+            except Exception:
+                pass
+    subprocess.run(["tar", "-xzf", local_tar, "-C", target_dir], check=True)
+    for root, _, files in os.walk(target_dir):
+        if "llama-server" in files:
+            srv = os.path.join(root, "llama-server")
+            os.chmod(srv, 0o755)
+            return srv
+    return "/content/engines/bin/llama-server"
+
+
+def stage_hybrid_layout(variant_key="unsloth-ud-iq2xxs", mode="delta", sparse_engram=False):
     """
     Stage all backbone shards (165.30 GB for Unsloth UD-IQ2_XXS or 138.59 GB for Abiray GSQ-RCO IQ2_XXS)
     directly onto G4's local PCIe Gen5 NVMe (/content/fast_deepseek) via 64-stream Google Drive v3 API Range
@@ -259,7 +296,7 @@ def stage_hybrid_layout(variant_key="unsloth-ud-iq2xxs"):
     print(f"=== [2/3] Creating Local NVMe Engram GGUF Mapping ({v['shard_engram']}) ===")
     engram_src = os.path.join(drive_v_dir, v["shard_engram"])
     engram_dst = os.path.join(fast_v_dir, "engram_local_nvme.gguf" if v["is_gsq_4shard"] else v["shard_engram"])
-    if v.get("full_engram"):
+    if v.get("full_engram") and not sparse_engram:
         hf_eng_rel = v.get("hf_engram_path", v["shard_engram"])
         file_id, engram_size = _lookup_drive_file(os.path.basename(hf_eng_rel), token)
         hf_engram_url = None
@@ -322,7 +359,11 @@ def stage_hybrid_layout(variant_key="unsloth-ud-iq2xxs"):
                 fdst.truncate(engram_size)
         print(f"  [NVMe ENGRAM OK] {engram_dst} ({engram_size/1e9:.2f} GB sparse NVMe backing)")
     else:
-        hf_engram_url, engram_size = _lookup_hf_file(v["repo"], v["hf_prefix"], v["shard_engram"])
+        hf_eng_rel = v.get("hf_engram_path")
+        if hf_eng_rel:
+            hf_engram_url, engram_size = _lookup_hf_file(v["repo"], "", hf_eng_rel)
+        else:
+            hf_engram_url, engram_size = _lookup_hf_file(v["repo"], v["hf_prefix"], v["shard_engram"])
         if not os.path.exists(engram_dst) or os.path.islink(engram_dst) or os.path.getsize(engram_dst) != engram_size:
             if os.path.lexists(engram_dst):
                 os.remove(engram_dst)
@@ -401,7 +442,7 @@ def stage_hybrid_layout(variant_key="unsloth-ud-iq2xxs"):
     v["mmproj_local_path"] = mmproj_dst if os.path.exists(mmproj_dst) else None
 
     first_shard = os.path.join(fast_v_dir, v["shards_nvme"][0])
-    if v.get("full_engram") and os.path.exists(first_shard):
+    if v.get("full_engram") and os.path.exists(first_shard) and mode == "delta":
         patch_coder_shard1_gguf(first_shard)
     return first_shard, engram_dst, v
 
@@ -842,6 +883,12 @@ def main():
         default=False,
         help="Switch to llama-server with --mmproj (BF16 972.2MB Vision Projector) enabled for image+text inputs",
     )
+    parser.add_argument(
+        "--sparse-engram",
+        action="store_true",
+        default=False,
+        help="Use 128 KB sparse GGUF header for shard 6 (Engram) for fast ~65s boot when testing vision/chat",
+    )
     parser.add_argument("--ctx", type=int, default=131072)
     parser.add_argument("--port", type=int, default=8150)
     parser.add_argument(
@@ -891,7 +938,7 @@ def main():
         print("  [VISION MODE] Switching engine from 'delta' to 'llamacpp-vision' to enable --mmproj BF16 image inputs!", flush=True)
         args.mode = "llamacpp-vision"
 
-    first_shard, engram_dst, v = stage_hybrid_layout(args.variant)
+    first_shard, engram_dst, v = stage_hybrid_layout(args.variant, mode=args.mode, sparse_engram=args.sparse_engram)
     cfg_path = build_delta_g4_config(
         first_shard,
         engram_dst,
@@ -958,6 +1005,9 @@ def main():
     elif args.mode in ("llamacpp-vision", "llamacpp-cpu", "llamacpp-hybrid"):
         if v["is_gsq_4shard"]:
             first_shard = ensure_llamacpp_6shard_layout(os.path.dirname(first_shard), engram_dst)
+        llama_srv_bin = ensure_mainline_llamacpp_b12128()
+        bin_dir = os.path.dirname(llama_srv_bin)
+        os.environ["LD_LIBRARY_PATH"] = f"{bin_dir}:/usr/local/cuda/lib64:{os.environ.get('LD_LIBRARY_PATH', '')}"
         subprocess.run(["fuser", "-k", f"{args.port}/tcp"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.5)
         if args.auth_caddy or args.tunnel or args.tunnel_token or os.environ.get("CT_TUNNEL_TOKEN"):
@@ -967,22 +1017,18 @@ def main():
                 tunnel_mode=args.tunnel,
                 tunnel_token=args.tunnel_token,
             )
+        eff_ctx = min(args.ctx, 32768) if args.mode == "llamacpp-vision" and args.ctx == 131072 else args.ctx
         cmd = [
-            "/content/engines/bin/llama-server",
+            llama_srv_bin,
             "--model",
             first_shard,
             "--alias",
             v["model_name"],
             "--ctx-size",
-            str(args.ctx),
+            str(eff_ctx),
             "-ngl",
             "99",
-            "--load-mode",
-            "mmap",
-            "--lazy-mode",
-            "on",
-            "--override-tensor",
-            "per_layer_token_embd.weight=CPU",
+            "--jinja",
         ]
         # For 72.12 GB ISTA-DASLab Coder, 100% of all 40 MoE layers + 972MB mmproj fit inside 96GB GDDR7 VRAM!
         if args.mode == "llamacpp-cpu":
@@ -994,10 +1040,6 @@ def main():
             cmd.extend(["--mmproj", mmproj_path])
             print(f"  [VISION ENABLED] Mounting BF16 Vision Projector: {mmproj_path}", flush=True)
         cmd.extend([
-            "--cache-type-k",
-            "q4_0",
-            "--cache-type-v",
-            "q4_0",
             "--temp",
             "1.0",
             "--top-p",
