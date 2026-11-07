@@ -1,11 +1,11 @@
-# MiniMax-H3 工业级写实长视频生成与多角色一致性全链路架构白皮书
+# MiniMax-H3 写实长视频与多角色工作流白皮书（历史方案参考）
 
-> **副标题**：基于 NVIDIA RTX PRO 6000 Blackwell (96GB) 与 ComfyUI 的零跳帧、零顿挫、零发雾、多人防串台、远景人脸防崩、物理空间轴线锁死及原生自锚定跨段双人情绪爆发终极工程指南  
-> **文档版本**：v2.5 (Publication Edition)  
-> **发布日期**：2026-10-24  
-> **适用硬件底座**：Google Colab G4 / NVIDIA RTX PRO 6000 Blackwell Server Edition (96GB GDDR7 VRAM)  
-> **核心模型栈**：MiniMax-H3 (33B Native AV-DiT) · Singularity v1.3 · Qwen3-VL-32B-Heretic (NVFP4) · BUNNY V2 & Semantic Bridge · Official `h3-prompt-writing` Ref2VA Protocol · H3 Self-Anchor Voice & T8mars Protocol  
-> **源码审计状态**：100% 经 ComfyUI 内核、官方 `MiniMax-AI/MiniMax-H3` (`h3-prompt-writing`) 规范与 12 大开源生态插件 Python 源码级及 G4 20s 四段式实机交叉验证
+先读 [当前制作 SOP](minimax_h3_zero_waste_sop.md) 选择工作流。本文件保存 v2.5 的 Singularity/Heretic、LoRA/Bunny、MotionContext 与 JoinMatch 等专项方案和案例；它们不属于当前官方 INT8 独立分段默认栈。只有明确选用对应方案后才使用相关章节。
+
+文中的“100%”“零穿帮”“锁死”等旧表述不具有保证效力，旧案例的速度、画质和参数不能推广到新人物、宠物、动作或其他节点版本。按当前 SOP、所选图和实际节点 schema 执行；多关键帧接口见已修订的 §5.7。无对白视频无需声纹，真人/美女题材不自动启用皮肤 LoRA，同机位也不自动启用潜变量续接。
+
+> **历史版本**：v2.5，2026-10-24
+> **历史运行环境**：Colab G4 / RTX PRO 6000，Singularity v1.3、Heretic NVFP4 与所列插件。以下架构和测量需结合其具体版本、输入和输出审阅。
 
 ---
 
@@ -38,7 +38,7 @@
   - [5.4 工业级实战范例：20s 四段式双人情绪递进对决完整分镜脚本 (`V5` 实机验证)](#54-工业级实战范例20s-四段式双人情绪递进对决完整分镜脚本-v5-实机验证)
   - [5.5 影视空间物理逻辑与三维运镜分级手册（根治“越轴/左右镜像颠倒、开门方向反了、跨段镜头乱晃”）](#55-影视空间物理逻辑与三维运镜分级手册根治越轴左右镜像颠倒开门方向反了跨段镜头乱晃)
   - [5.6 动作、武打与舞蹈 8~15 秒一镜到底长镜头（Long-Take Choreography）分镜编排规范](#56-动作武打与舞蹈-815-秒一镜到底长镜头long-take-choreography分镜编排规范)
-  - [5.7 多关键帧序列引导生成与 `MiniMaxH3AddGuide` $17k$ 相位锚定规范（兼论为何严禁将关键帧拼成单张宫格图传入）](#57-多关键帧序列引导生成与-minimaxh3addguide-17k-相位锚定规范兼论为何严禁将关键帧拼成单张宫格图传入)
+  - [5.7 身份参考与时间轴引导：接口、接线和验证边界](#h3-guide-contract)
 - [第六章：原生音频参考、多人声纹隔离与跨段情绪爆发终极方案](#第六章原生音频参考多人声纹隔离与跨段情绪爆发终极方案)
   - [6.1 MiniMax-H3 原生音频参考（Audio Reference）的三大核心能力](#61-minimax-h3-原生音频参考audio-reference的三大核心能力)
   - [6.2 实战核心痛点攻克：首段多人同时/先后发声如何防止声纹混音污染？](#62-实战核心痛点攻克首段多人同时先后发声如何防止声纹混音污染)
@@ -951,62 +951,27 @@ Fast-paced, hard-hitting 140-BPM industrial action percussion building to a dram
 
 ---
 
-### 5.7 多关键帧序列引导生成与 `MiniMaxH3AddGuide` $17k$ 相位锚定规范（兼论为何严禁将关键帧拼成单张宫格图传入）
+<a id="h3-guide-contract"></a>
 
-当面对极高难度的定制武打招式、精准受击落点或特定走位构图，希望能用**多张动作关键帧图片（Keyframe Sequence）**实现“指哪打哪”的 100% 确定性生成时，必须严格区分 **“静态外观参考 (`MiniMaxH3ReferenceToVideo`)”** 与 **“时间轴关键帧潜空间引导 (`MiniMaxH3AddGuide`)”** 的底层差异。
+### 5.7 身份参考与时间轴引导：接口、接线和验证边界
 
-#### 1. 为什么严禁把多张关键帧“拼成一张宫格大图”传给 `MiniMaxH3ReferenceToVideo`？
+静态身份参考与时间轴引导承担不同职责。身份图接 `MiniMaxH3ReferenceToVideo`，每个时间点需要的完整场景图分别接 Add Guide；不要将分镜宫格作为单张时间轴引导图。
 
-若将 3~4 张连续动作的关键帧拼合为一张横排连环画或 $2\times2$ 四宫格图片，作为 `<Picture N>` 传入 `MiniMaxH3ReferenceToVideo`，会在底层触发三大严重故障：
-1. **时空维度混淆（四宫格分屏污染）**：`MiniMaxH3ReferenceToVideo` 通过 `Qwen3-VL-32B` 视觉编码器与视频 VAE 提取的是**空间外观特征（Spatial Identity Tokens）**，并不理解宫格图代表“时间先后顺序”。模型会将宫格十字黑线/白边误认为场景本身的物理结构，直接生成带有“监控四分屏/画中画分割线”的废片。
-2. **同一角色多重姿态冲突（诱发“三头六臂”重影）**：单张拼图内包含同一角色的 4 种不同出拳/踢腿姿态，会导致视觉参考 Token 内部包含互相矛盾的肢体空间坐标，去噪时极易诱发多只手臂残影或肢体扭曲。
-3. **首帧强行贴图闪切（呼应第三章踩坑 #11）**：未绑定独立新角色的拼图会被编码器当作第 `0.0s` 首帧像素直接贴在画布上，随后在 `0.5s` 发生剧烈闪帧跳切。
+当前默认只要求每段第 0 帧引导；中间/末尾多关键帧属于额外配置，使用前核对当前节点接口、帧索引映射、合法区间及该图的实际效果。不要从另一个模型的 `frame_idx // 8` 规则推断 H3 的索引，也不要把旧示例的帧号当成已验证的通用约束。
 
----
-
-#### 2. 原生实现“多关键帧序列控制（Keyframe In-Betweening）”的正确架构：串联 `MiniMaxH3AddGuide`
-
-在 ComfyUI 官方内核（`comfy_extras/nodes_minimax_h3.py`）中，提供了专门用于在时间轴任意帧位钉入单张或序列关键帧的原生节点 —— **`MiniMaxH3AddGuide`**（以及首尾帧专用节点 `MiniMaxH3FirstLastFrameToVideo`）。
+在已记录的 ComfyUI `51285bff5bdc618f5dbe821377bbcdc5f3e94ea7`，图片 Add Guide 使用 `positive`、`latent`、`vae`、`image`、`frame_idx`，没有 `strength` 参数。默认分段的接线为：
 
 ```mermaid
 flowchart LR
-    R2V["MiniMaxH3ReferenceToVideo<br/>传入纯净定妆照 &lt;Picture 1/2&gt;<br/>(负责锁死人物五官与服装身份)"] --> G1["MiniMaxH3AddGuide #1<br/>独立关键帧单图 A (起势对峙)<br/>frame_idx = 0, strength = 1.0"]
-    G1 --> G2["MiniMaxH3AddGuide #2<br/>独立关键帧单图 B (右拳正中左眉骨裂开)<br/>frame_idx = 85 (3.54s), strength = 0.85"]
-    G2 --> G3["MiniMaxH3AddGuide #3<br/>独立关键帧单图 C (正蹬踹退至笼网)<br/>frame_idx = 170 (7.08s), strength = 0.90"]
-    G3 --> BUNNY["BunnyH3ConditioningBridge<br/>(alpha = 0.22)"]
-    BUNNY --> SAMP["SamplerCustomAdvanced<br/>自动生成 A → B → C 之间的丝滑打斗补间动画!"]
+    ID[独立角色身份图] --> REF[MiniMaxH3ReferenceToVideo]
+    REF -->|positive 与 joint latent| GUIDE[MiniMaxH3AddGuide · frame_idx 0]
+    SCENE[本段完整场景首帧] --> GUIDE
+    GUIDE -->|positive| GUIDER[BasicGuider]
+    GUIDER --> SAMPLE[SamplerCustomAdvanced]
+    REF -->|原始 joint latent| SAMPLE
 ```
 
-- **底层物理机制**：
-  `MiniMaxH3AddGuide` 接收 `conditioning`、`vae`、`latent` 以及一张**独立的 `1344×768` 全画幅关键帧单图 (`image`)**，通过视频 VAE 将该关键帧编码为潜空间特征后，**直接覆写进 `video_latent` 在指定 `frame_idx` 处的时间槽位**，并同步将对应位置的 `denoise_mask` 压低为 $1.0 - \text{strength}$。
-- **确定性补间效果**：
-  采样器在去噪时，第 `0` 帧被锁死为关键帧 A，第 `85` 帧（`3.54s`）必须精确穿过关键帧 B（例如“林野黑拳头正面砸在高天左眉骨上渗血”），第 `170` 帧（`7.08s`）必须到达关键帧 C（“正蹬踹退拉开身位”）。模型会自动计算出 A $\to$ B $\to$ C 之间符合物理惯性的挥拳、受击后仰与踹退补间动画（In-betweening），将高难度动作落点的抽卡失败率直接降为 **0%**！
-
----
-
-#### 3. `MiniMaxH3AddGuide` 的 $17k$ 周期帧号对齐铁律（防止关键帧模糊或相位偏移）
-
-根据第一章 §1.2 的 **5-Token 非均匀时间压缩网格定律**，MiniMax-H3 视频 VAE 每 5 个潜空间 Token 对应 $(1, 4, 4, 4, 4) = 17$ 帧像素图像：
-- 每个周期（17 帧）的**第 0 个 Token 是独立编码单帧图像（`1-Frame Anchor`）**；
-- 而其余 4 个 Token 均是 **4 帧混合压缩槽位（`4-Frame Temporally Compressed Slot`）**。
-
-> [!IMPORTANT]
-> **工程红线（`frame_idx = 17k` 铁律）**：在使用 `MiniMaxH3AddGuide` 向视频中途插入单张静态关键帧图片时，**`frame_idx` 必须严格设为 `17` 的整数倍（$17k$）**！若误填非 $17k$ 的帧号（如 `frame_idx = 80`），单张静态图会被塞入 4 帧混合压缩 Token 中，解码后在关键帧前后会产生 4 帧重影或模糊伪影；只有精准落在 $17k$ 上，关键帧才能独占 `1-Frame` 周期首锚点，保持 100% 锐利无重影！
-
-| 周期序号 $k$ | 合法关键帧索引 `frame_idx` ($17k$) | 对应视频时间点 (@24fps) | 对应潜空间 Token 索引 ($5k$) | 典型动作/分镜关键帧钉入位置 |
-| :---: | :---: | :---: | :---: | :--- |
-| $k = 0$ | **`0`** | `0.000 s` | Token `0` | **起势首帧（Keyframe A）**：开场站位与初始抱架锚定 |
-| $k = 2$ | **`34`** | `1.417 s` | Token `10` | **第一拍命中帧**：潜闪避拳后左勾拳击中肋部瞬间 |
-| $k = 3$ | **`51`** | `2.125 s` | Token `15` | **攻防转换帧**：格挡卸力或旋身蓄力瞬间 |
-| $k = 5$ | **`85` ★** | **`3.542 s`** | Token `25` | **核心受击/挂彩帧（Keyframe B）**：右拳正中左眉弓开裂流血瞬间 |
-| $k = 6$ | **`102`** | `4.250 s` | Token `30` | **连击追击帧**：左平勾拳抽击下颌嘴角溢血瞬间 |
-| $k = 8$ | **`136`** | `5.667 s` | Token `40` | **击退发力帧**：起右腿正蹬踹中对手胸口瞬间 |
-| $k = 10$ | **`170` ★** | **`7.083 s`** | Token `50` | **击退落位帧（Keyframe C）**：对手撞上笼网、两人拉开净空 |
-| $k = 11$ | **`187`** | `7.792 s` | Token `55` | **`192 帧 (8.0s)` 镜头准尾帧**：稳定定格供下一段 `MotionContext` 无损切片 |
-
-- **参数黄金配比**：
-  - **首帧 (`frame_idx = 0`)**：建议设 `strength = 1.0`（100% 锁死起始画面）；
-  - **中途动作关键帧 (`frame_idx = 85` 或 `170`)**：建议设 **`strength = 0.80 ~ 0.90`**（既强制动作姿态与受击落点 100% 贴合关键帧，又留出 `10%~20%` 的去噪裕度让模型自然合成动态模糊、衣褶摆动与前后帧的运动速度衔接，避免视频在经过关键帧时发生瞬间“定格卡顿”）。
+模型和 VAE 对引导进行条件化，不保证逐像素复制或动作落点精确到帧。旧文的 `strength=0.8–1.0`、以 `1-strength` 修改 denoise mask 和“0% 失败率”不是这个已记录接口的有效用法，应停止使用。升级版本时重新检查节点定义，保留实际图、输入和输出以验证约束。
 
 ---
 

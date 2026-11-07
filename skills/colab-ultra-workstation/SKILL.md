@@ -13,7 +13,7 @@ description: "Google AI Ultra (5x 1,000 CCU + 20TB / 20x 2,000 CCU + 30TB Google
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`download` / `preprocess`**<br>下载模型、解压数据集、挂载云盘 | **`CPU`** | Host CPU | **0 CCU/h** | ♾️ 无限 | **严禁开着高价 GPU (G4/A100/H100) 从 HuggingFace 首次下载几十 GB 模型**。若检测到当前 `ccu_per_hour >= 5.0` 且模型尚未存在于云盘，必须先拦截并切回 CPU 下载。 |
 | **`light_video`**<br>Wan2.1-1.3B、LTX-Video、Flux、代码调试 | **`L4 GPU`** | 22.5 GB GDDR6<br>Ada (`sm_89`) | **1.71 CCU/h** | • **5x**: ~584 小时<br>• **20x**: ~1,169 小时 | 支持原生 FP8；显存 < 24GB，建议开启 `enable_model_cpu_offload()`。 |
-| **`heavy_video`（主力王炸）**<br>**MiniMax-H3 (33B + 32B 破限编码器)**、Wan2.1-14B、HunyuanVideo | **`G4 GPU`** | **96 GB GDDR7**<br>RTX PRO 6000 Blackwell (`sm_120a`) | **8.71 ~ 10.05 CCU/h** | • **5x**: ~100 ~ 115 小时<br>• **20x**: ~199 ~ 230 小时 | **完全替代 A100 与 H100**！拥有 1 PFLOPS BF16 / 2 PFLOPS FP8 / 4 PFLOPS FP4 算力，关闭 `cpu_offload`，全量常驻 96G 显存。 |
+| **`heavy_video`（主力王炸）**<br>**MiniMax-H3 (33B + 32B 编码器)**、Wan2.1-14B、HunyuanVideo | **`G4 GPU`** | **96 GB GDDR7**<br>RTX PRO 6000 Blackwell (`sm_120a`) | **8.71 ~ 10.05 CCU/h** | • **5x**: ~100 ~ 115 小时<br>• **20x**: ~199 ~ 230 小时 | 按选定模型栈验证显存与性能；视频启动策略见下方 SOP。官方 INT8 基线使用默认动态显存，不统一强制关闭 offload 或添加 `--highvram`。 |
 
 ## 2. 基础大语言模型 (LLM) 全尺寸选卡矩阵（推理 & 微调）
 
@@ -62,24 +62,24 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
    - **路径兼容**：自动建立软链接 `os.symlink("/content/drive/My Drive", "/content/drive/MyDrive")`。
 
 3. **跨档位通用防浪费三原则（Zero-Burn Core Rules）**：
-   - **本地 `0 CCU` 备料**：所有提示词编排、配置修改与首帧素材准备必须在启动高价 GPU 前在本地完成。
+   - **本地 `0 CCU` 备料**：提示词、配置与可独立准备的首帧在启动高价 GPU 前完成。依赖上一段输出的首帧预先安排自动提取；若需重新创作，先保存成果并释放 GPU。
    - **严禁在 FUSE 云盘路径直接 `mmap` 大模型**：FUSE 随机读仅 `~25 MB/s` 且受 `112 GiB` 缓存上限限制；必须通过并发 Google Drive v3 API 或 HuggingFace CDN 将核心权重直灌本地 NVMe SSD（`/content/fast_*`）。
    - **长耗时任务强制 `nohup` 脱机启动**：超过 15 秒的远程任务一律用 `nohup ... > /tmp/task.log 2>&1 &` 后台拉起，再用 `alarm` 超时轮询日志，防止 WebSocket 断连卡死。
 
 4. **关机落盘核验与强制双轨 CCU 结算报告**：
-   - **关机前防丢失核验**：向 `/content/drive` 写入大文件后，销毁实例前必须通过 Google Drive v3 API (`files.list`) 确认云端 `size > 0`。
+   - **关机前防丢失核验**：向 `/content/drive` 写入大文件后，销毁实例前必须通过 Google Drive v3 API (`files.list`) 确认最终成果的云端 `size > 0` 并核对完整性；随后释放目标 endpoint，并以成功的服务端响应确认该 endpoint 已不存在。保留无关会话，脚本打印成功不能代替核验。
    - **双轨计费核验（`scripts/colab_meter.py`）**：
      - 开机打点：`python3 scripts/colab_meter.py start -s <session> -g <G4|L4|T4>`
      - 停机释放结算：`python3 scripts/colab_meter.py stop -s <session>`
    - **标准释放报告格式（每次释放算力后必须输出）**：
      ```text
      ✅ 算力释放与计费核验报告：
-     • 实例释放状态: Active assignments: 0
-     • 实时消耗速率: 0.00 CCU/h (已完全停止计费)
-     • 本次运行机型: G4 (NVIDIA RTX PRO 6000 Blackwell, 10.05 CCU/h)
+     • 目标实例释放状态: 服务端已确认目标 endpoint 不存在
+     • 账户活动实例 / 总速率: 按服务端实读填入；仅无其他实例时为 0 / 0.00 CCU/h
+     • 本次运行机型 / 费率: 按本次分配记录填入
      • 本次运行时长: X 分 Y 秒
-     • 本次实际消耗: Z.ZZ CCU (按时长精确折算)
-     • 当前账户余额: XXX.XX CCU
+     • 本次估算消耗: Z.ZZ CCU (时长 × 费率；非已核实实扣)
+     • 当前账户余额 / 余额变化: 按实读填入，扣款可能延迟
      ```
 
 ## 5. 按需加载的专项领域参考文档 (Progressive Disclosure Routing)
@@ -88,9 +88,9 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
 
 - **单卡 96GB G4 部署与评测 748B `DeepSeek-V4.1-Flash-1017`（2-Bit 双模型网关 & Engram 置零排障）**：
   - 当用户要求在 G4 上运行 `DeepSeek-V4.1-Flash`、切换 `Unsloth UD-IQ2_XXS` / `Abiray GSQ-RCO IQ2_XXS`、配置 `fast_start_g4.sh` 或排查 Engram 置零导致的拼写/SVG 瑕疵时，读取 **[`references/deepseek_v41_748b_g4_guide.md`](references/deepseek_v41_748b_g4_guide.md)** 及脚本说明 **[`scripts/deepseek_g4/README.md`](scripts/deepseek_g4/README.md)**。
-- **MiniMax-H3 视频生成、双擎云端 TTS (`Qwen3-TTS` + `IndexTTS-2`) 与潜变量续跑操作铁律**：
-  - 当用户使用 G4 生成 `MiniMax-H3` 短剧/动作长镜头、配置 `F = 17k + 5` 帧数、合成配音、使用 `SaveLatent/LoadLatent` 断点续跑或压制自动字幕时，**必须先读取 [`references/minimax_h3_zero_waste_sop.md`](references/minimax_h3_zero_waste_sop.md)**（包含完整的铁律 A ~ G）。
+- **MiniMax-H3 通用制作、预防性执行与工作流选择**：
+  - 当用户使用 G4 生成 `MiniMax-H3` 短剧/动作长镜头、配置 `F = 17k + 5` 帧数、合成配音、使用 `SaveLatent/LoadLatent` 断点续跑或压制自动字幕时，**必须先读取 [`references/minimax_h3_zero_waste_sop.md`](references/minimax_h3_zero_waste_sop.md)**（先区分独立分段与潜变量续接，再执行对应步骤）。
 - **MiniMax-H3 工业级双轨架构与多角色一致性深度白皮书**：
-  - 当需要深入了解方案 A/B 架构、22 帧潜空间接力、`H3 Join Match` 手动参数、`Self-Anchor Voice` 原生自锚定声纹或 `V3 ProSeam` 武指分镜语法时，读取 **[`references/minimax_h3_industrial_workflow_whitepaper.md`](references/minimax_h3_industrial_workflow_whitepaper.md)**。
+  - 仅在明确选用旧方案 A/B、潜变量续接或需要查阅历史实测时读取；其参数与效果描述不能覆盖当前 SOP 或具体节点版本。对应文档： **[`references/minimax_h3_industrial_workflow_whitepaper.md`](references/minimax_h3_industrial_workflow_whitepaper.md)**。
 - **MiniMax-H3 无审核破限版与 ComfyUI 节点搭建指南**：
-  - 当用户首次搭建 `MiniMax-H3` + `Qwen3-VL-32B-Ultra-Heretic` 无审核编码器或配置 2K 视频超分时，读取 **[`references/minimax_h3_uncensored_comfyui_guide.md`](references/minimax_h3_uncensored_comfyui_guide.md)**。
+  - 仅在项目明确选择该社区模型栈时读取，不作为官方 INT8 默认流程的安装指南： **[`references/minimax_h3_uncensored_comfyui_guide.md`](references/minimax_h3_uncensored_comfyui_guide.md)**。

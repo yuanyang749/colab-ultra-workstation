@@ -13,7 +13,7 @@ colab-ultra-workstation/
 ├── SKILL.md                                           # Agent 智能硬件调度与防烧钱拦截技能定义
 ├── references/
 │   ├── deepseek_v41_748b_g4_guide.md                  # 单卡 96GB G4 驯服 748B DeepSeek-V4.1 零 Swap 实战与两大 2-Bit 旗舰评测指南
-│   ├── minimax_h3_zero_waste_sop.md                   # MiniMax-H3 视频生成、双擎云端 TTS 与潜变量续跑标准作业程序 (铁律 A~G)
+│   ├── minimax_h3_zero_waste_sop.md                   # MiniMax-H3 通用制作 SOP、方案选择与执行前检查
 │   ├── minimax_h3_industrial_workflow_whitepaper.md   # MiniMax-H3 工业级写实长视频与多角色一致性全链路架构白皮书 (v2.5)
 │   └── minimax_h3_uncensored_comfyui_guide.md         # MiniMax-H3 无审核破限版 + Turbo 加速 + ComfyUI 高阶实战指南 (含实战踩坑与避坑总表)
 ├── scripts/
@@ -157,28 +157,22 @@ git clone https://github.com/yuanyang749/colab-ultra-workstation.git ~/.agents/s
 
 ---
 
-## 🎬 MiniMax-H3 (33B Native AV-DiT) 工业级影视工作流 (`v2.5`)
+## 🎬 MiniMax-H3 视频制作：共用流程与专项方案
 
-本仓库内置了在 **G4 (96GB Blackwell)** 上实机打磨验证的 **[《MiniMax-H3 工业级写实长视频生成与多角色一致性全链路架构白皮书 v2.5》](references/minimax_h3_industrial_workflow_whitepaper.md)** 与 **[《无审核破限版 ComfyUI 实战指南》](references/minimax_h3_uncensored_comfyui_guide.md)**，核心能力包括：
+先读 [制作 SOP](references/minimax_h3_zero_waste_sop.md)，明确模型栈、每段输入和衔接方式，再准备素材和分配 GPU。人物短剧、美女/时装展示、宠物与风格化角色共用身份、分镜、实际状态衔接和验收方法；各题材按自己的解剖、材质与表演要求检查。已安装 `minimax-h3-drama-producer` 时，由它负责具体导演与本地后期，本仓库负责算力和云端执行。
 
-1. **96GB 显存全量锁死（零 CPU Offload）+ 双通道 NVMe 极速冷启动**：
-   - 采用 `Singularity v1.3`（8步极速 DiT，`33GB`）+ `Qwen3-VL-32B-Heretic NVFP4`（无审核视觉语言编码器，`9.5GB`）+ `r34l1sm` 皮肤质感 LoRA + `BUNNY V2` 多人动作逻辑桥，总权重 ~43GB 全量常驻 G4 显存，预留 **49GB 纯动态激活值空间**，单次直出支持 **`3.75s ~ 15.08s`（`90 ~ 362 帧`）弹性分镜**。
-   - [`scripts/launch_g4_comfyui_fast.py`](scripts/launch_g4_comfyui_fast.py) (`v2.2`) 绕开 FUSE 软链接随机读与小文件遍历瓶颈，通过「Google Drive v3 API (`~150 MB/s`) + HuggingFace CDN (`~350-450 MB/s`)」双通道与环境构建三路全并发，以 **均速 463 MB/s（仅拉取当前方案所需的 `42.33 GB` 核心权重，耗时 ~75.4 秒）** 极速落盘至 `/content/fast_models` 本地 NVMe SSD，并通过 `custom_nodes_bundle.tar.gz` 单文件归档包 **1.5 秒** 解压 13 套自定义节点（彻底跳过 FUSE 遍历 3,000+ 小文件的 60 秒卡顿），ComfyUI 再以 **`2.5 GB/s`（约 16 秒）** 将模型全量读入 96GB 显存并永久常驻（第 2 次起 **0 秒** 加载）。
-2. **$17k - 12$ / $17k + 5$ 黄金帧数定律与零跳帧、零起雾无缝接力**：
-   - 遵循 5-Token $(1,4,4,4,4)=17$ 帧非均匀时间压缩网格，首段采用 $17k - 12$（如 `124` 帧 / `192` 帧），续接段采用 $17k + 5$（如 `141` 帧 / `192` 帧）配合 `MiniMaxH3MotionContext (context_frames = 22)` 物理裁除前 22 帧重叠区实现零相位硬切。
-   - 显式配置 `MiniMaxH3JoinMatch (tuning = "manual", strength = 0.35, min_excess = 2.5, match_spread = False, match_detail = False)`，彻底根除多镜头接力后段画面发雾发灰问题。
-3. **H3 原生自锚定声纹 (`Self-Anchor Voice`) + `T8mars` 跨段双人情绪爆发协议**：
-   - 摒弃机械感重的外部 TTS 种子，直接提取第 1、2 段 H3 原生直出的高质量干声升频为 `32kHz Stereo` 作为 `<Audio 1>` 声纹锚点；
-   - 在情绪爆发段通过 `[Shot 1]` 台词声学副语言前缀（`shouting furiously at the top of his lungs...`）+ `overall_soundscape` 瞬态重音锚点（`loud table slam at 00:00.400`）实现 **`+7.3 dB ~ +10.2 dB` 跨段情绪跃迁**且角色音色 100% 锁死。
-4. **武指级 15 秒一镜到底动作暗切 (`V3 ProSeam`)、分阶段同源战损切换 (`V6 BrowStrike`) 与 $17k$ 关键帧控制**：
-   - **技巧性暗切（拒绝缠斗硬拆）**：上半段结尾（`6.0s~8.0s`）设计正蹬踹退制造 `0.3s` 物理分离呼吸点（`join_match = 0.1135 ~ 0.1243`，肉眼 0 拼接痕迹），下半段借笼反弹 + 顺势推镜 + 单步下潜扣腕寸拳急停，实现 15.08 秒格斗长镜头连续多抽 100% 零穿模。
-   - **写实战损与 1:1 受击对齐**：基于无伤定妆照 1:1 同源重绘战损定妆照（[`damaged.png`](references/minimax_h3_industrial_workflow_whitepaper.md)）分段切换，剔除夸张空中血雾，严格匹配高位拳峰直击左眉弓（`without touching his neck`），实现拳峰落点与眉骨裂口流血 100% 物理严丝合缝。
-   - **多关键帧序列补间控制**：严禁将多张关键帧拼成单张宫格大图传入 `<Picture N>`；使用官方 `MiniMaxH3AddGuide` 按 **`frame_idx = 17k`（`0, 34, 51, 85, 136, 170`）** 串联钉入独立关键帧单图，实现零抽卡失败率的确定性动作补间。
-5. **按场景隔离的 `workflows/` 独立工作流包 + `5MB` 潜变量单段热插拔 (`--only-seg N`) + 首尾双端潜空间夹具 (`V9_TailLock`)**：
-   - **[`workflows/01_dialogue_2p_photorealistic/`](workflows/01_dialogue_2p_photorealistic/)（真人写实 · 双角色多段连续对手戏独立工作流包）**：
-     - 提供新手零门槛的 40 行配置文件 [`drama_config.json`](workflows/01_dialogue_2p_photorealistic/drama_config.json)，无需修改上千行 ComfyUI 节点图即可一键替换男女主角定妆照、5 秒声纹种子、说话顺序、中文台词、首段出入场毛玻璃人物铭牌及画风模式（`photorealistic` / `stylized`）；
-     - 内置 `H3SaveAVLatent / H3LoadAVLatent`（每段仅 `~4.8 MB` 原生 `AV_LATENT` 断点持久化至云盘），支持通过 `python3 run_drama.py --config drama_config.json --only-seg 3` 在 **3 分钟内（立省 74% 时间与 CCU）** 单独重修任意一段并无缝合成 20 秒母带；
-     - 支持 `MiniMaxH3AddGuide` 尾帧双端潜空间夹具（`frame_idx = [107, 136]`），100% 焊死长镜头末尾角色脸部朝向，彻底杜绝向镜头破轴微转头。
-   - **[`workflows/02_action_mma_combat/`](workflows/02_action_mma_combat/) & [`workflows/03_dance_choreography/`](workflows/03_dance_choreography/)**：独立隔离的高燃动作格斗与长镜头舞蹈专精工作流目录，各场景参数与脚本互不污染。
+| 方案 | 输入与边界 |
+| --- | --- |
+| 当前默认：独立 Ref2VA 分段 | 每段独立身份参考 + 第 0 帧场景引导；官方 INT8 模型/编码器、24 步，无额外适配器，默认动态显存。后段不加入 MotionContext、JoinMatch 或续接裁帧。 |
+| 明确选用的旧 V9 / 潜变量续接 | 按选定图使用原生 AV latent、相应重叠与音频处理；模型栈、插件和启动 flags 整套核对。`launch_g4_comfyui_fast.py --profile scheme_a` 属于旧模型栈，不能直接启动当前默认图。 |
 
+[SOP](references/minimax_h3_zero_waste_sop.md) 把准备、Drive 凭据预检、150–180 秒启动心跳、后台执行、成果核验、目标实例释放和本地后期放在实际执行阶段。已完成准备再开 GPU；确认成果落盘后及时释放，服务端核验目标 endpoint，不把脚本打印成功或估算消耗当作停机/实扣证据。
 
+已有专项材料保留供选用和复现：
+
+- [历史白皮书](references/minimax_h3_industrial_workflow_whitepaper.md)：v2.5 模块化/时间线、原生声音与潜变量续接案例；旧效果描述不是通用保证。
+- [社区模型安装指南](references/minimax_h3_uncensored_comfyui_guide.md)：仅适用于选择对应社区模型栈的项目。
+- [真人双角色旧 V9 工作流](workflows/01_dialogue_2p_photorealistic/README.md)：保持原图与脚本，生产改动放在独立项目；不能当作新的独立分段默认图。
+- [动作案例目录](workflows/02_action_mma_combat/README.md)、[舞蹈案例目录](workflows/03_dance_choreography/README.md) 与 [竖屏美女/舞蹈专项模板](workflows/04_douyin_beauty_dance/README.md)：动作、节奏和服装按当前作品设计，按具体模板核对输入、裁帧和输出画布。
+
+每段保留实际执行图、来源和原生输出。按剧情/动作需要选时长，按真实对白做字幕；分别验收外观、表演、连续性、声音和文件完整性，关键帧和声纹参考不代表确定性复现。

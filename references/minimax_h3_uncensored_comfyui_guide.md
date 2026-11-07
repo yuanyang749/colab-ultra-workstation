@@ -1,5 +1,7 @@
 # 🎬 MiniMax-H3 (海螺 3) 无审核破限版 + Turbo 极速工作流实战指南
 
+先按 [当前制作 SOP](minimax_h3_zero_waste_sop.md) 选择方案。本文件仅用于明确选用社区 Heretic/Turbo 等模型栈时的历史安装参考，不是官方 INT8 默认流程。下文的 LoRA、速度和画质结论限于相应版本与样例；真人/美女题材不自动要求替换编码器或加皮肤适配器，使用前核对实际节点和模型文件。
+
 > **适用环境**：Google AI Ultra（5x: 1,000 CCU + 20TB 云盘 / 20x: 2,000 CCU + 30TB 云盘）+ `colab-ultra-workstation` 技能
 > **最佳硬件组合**：**0 CCU/h 免费 CPU**（首次下载 50~65GB 全套权重与部署 ComfyUI） + **G4 GPU（96GB RTX PRO 6000 Blackwell, 8.71 CCU/h）**（33B DiT + 32B 破限编码器 100% 显存常驻，原生 FP8/NVFP4 加速）
 
