@@ -41,7 +41,7 @@ open_dance_bgm_kit/
   * `popping` (`Street, Popping`)：强电子脉冲震感卡点舞（推荐编号：`058, 064, 069, 087, 089, 091, 092, 157, 159, 160, 161`）
   * `guofeng` (`Classic, HanTang` / `DunHuang`)：汉服、敦煌、国风折扇转圈舞曲（推荐编号：`021, 028, 029, 035, 036, 041, 044, 048, 114`）
 * 💡 **独家技术技巧（无损 36 秒母带还原法）**：  
-  HuggingFace 仓库中单文件是 `12.0秒` 的切片（`016_slice_0.wav`, `016_slice_1.wav`...）。经过逐采样点波形差分验证，相邻编号切片是以 **`6.0秒` 滑动窗口步进** 切出的（`shift=6.0s` 时 `mean_abs_diff = 0.00`，100% 比特级重合）。因此，[`fetch_dance_bgm.py`](file:///Users/delroy/Documents/Playground/test001/workflows/04_douyin_beauty_dance/open_dance_bgm_kit/fetch_dance_bgm.py) 直接拉取偶数号切片 **`slice_0 + slice_2 + slice_4`** 无缝拼接，即可零损还原出 **36.0 秒完整 `44.1kHz` 双声道母带 WAV**！
+  HuggingFace 仓库中单文件是 `12.0秒` 的切片（`016_slice_0.wav`, `016_slice_1.wav`...）。经过逐采样点波形差分验证，相邻编号切片是以 **`6.0秒` 滑动窗口步进** 切出的（`shift=6.0s` 时 `mean_abs_diff = 0.00`，100% 比特级重合）。因此，[`fetch_dance_bgm.py`](./fetch_dance_bgm.py) 直接拉取偶数号切片 **`slice_0 + slice_2 + slice_4`** 无缝拼接，即可零损还原出 **36.0 秒完整 `44.1kHz` 双声道母带 WAV**！
 
 ---
 
@@ -118,9 +118,9 @@ python3 workflows/04_douyin_beauty_dance/open_dance_bgm_kit/fetch_dance_bgm.py \
 
 ---
 
-## 🔗 与主工作流 [`run_dance.py`](file:///Users/delroy/Documents/Playground/test001/workflows/04_douyin_beauty_dance/run_dance.py) 无缝联动
+## 🔗 与主工作流 [`run_dance.py`](../run_dance.py) 无缝联动
 
-[`run_dance.py`](file:///Users/delroy/Documents/Playground/test001/workflows/04_douyin_beauty_dance/run_dance.py) 已内置自动检索 `open_dance_bgm_kit/tracks/` 目录，下载好的任何曲目直接通过文件名传给 `--bgm`，配合 `--duration` 即可一键生成 **8秒 / 15秒 / 20秒 / 30秒** 热舞视频：
+[`run_dance.py`](../run_dance.py) 已内置自动检索 `open_dance_bgm_kit/tracks/` 目录，下载好的任何曲目直接通过文件名传给 `--bgm`，配合 `--duration` 即可一键生成 **8秒 / 15秒 / 20秒 / 30秒** 热舞视频：
 
 ```bash
 python3 workflows/04_douyin_beauty_dance/run_dance.py \

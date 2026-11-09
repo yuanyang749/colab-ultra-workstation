@@ -11,6 +11,7 @@
 5. [铁律 E：独立云端双引擎 TTS 极速工作流（`Qwen3-TTS-1.7B` + `IndexTTS-2`，零 ComfyUI 依赖）](#5-铁律-e独立云端双引擎-tts-极速工作流qwen3-tts-17b--indextts-2零-comfyui-依赖)
 6. [铁律 F：`MiniMax-H3 Ref2VA` 通用短剧零穿帮与 `H3 Join Match` 零起雾黄金准则](#6-铁律-fminimax-h3-ref2va-通用短剧零穿帮与-h3-join-match-零起雾黄金准则)
 7. [铁律 G：分段原生潜变量快照 `SaveLatent / LoadLatent` 零损耗断点续跑 + 本地 0 CCU 自动字幕](#7-铁律-g分段原生潜变量快照-savelatent--loadlatent-零损耗断点续跑--本地-0-ccu-自动字幕)
+8. [铁律 H：二阶段视频「精修 / 2K 超分」强制交互确认门禁（严禁擅自直接跑高耗全幅精修）](#8-铁律-h二阶段视频精修--2k-超分强制交互确认门禁严禁擅自直接跑高耗全幅精修)
 
 ---
 
@@ -84,3 +85,14 @@
   1. **首次全链生成自动存快照（`--inject-checkpoints`）**：在每一段末尾并联 ComfyUI 原生 `SaveLatent` 节点，每段自动将未解码的原始 `AV_LATENT`（仅 `~12MB`）存至 `output/latents/`；
   2. **单段/局部重拍 0.1 秒无损续跑（`--resume-from N`）**：自动剪除前 $N-1$ 段采样节点，将上游输出节点原位替换为 `LoadLatent` 直接加载 `Seg02_raw_av.latent` 喂给 `MiniMaxH3MotionContext` 与 `MiniMaxH3JoinMatch`，实现 **100% 逐比特潜空间一镜到底 + 节省 50%~75% 算力时间**。
 - **本地 0 CCU 声学对齐字幕与人物出场铭牌**：严禁在扩散提示词中要求模型直接生成内嵌中文字幕（必出笔画乱码，提示词须声明 `no subtitles`）。成片回传本地后，调用 [`scripts/auto_subtitle_video.py`](../scripts/auto_subtitle_video.py) 自动分析每段人声包络起止点与句中换气停顿（10ms 精度，过滤拍桌脉冲），一键生成 `.srt` 外挂字幕及带柔和出入场微动效（`0.38s` Alpha 淡入淡出 + `18px` 横向轻滑）的人物介绍铭牌与 2 倍超采样电影级内嵌硬字幕。
+
+---
+
+## 8. 铁律 H：二阶段视频「精修 / 2K 超分」强制交互确认门禁（严禁擅自直接跑高耗全幅精修）
+
+- **背景根因**：全幅 `g4_optimal` Tessera 2K 精修将画面切为上/中/下 3 个空间分块 × 3 个时序滑窗，30s 视频需跑 **54 轮扩散采样**（耗时 ~102 分钟、消耗 **`~18.75 CCU`**，其中 2/3 算力浪费在腿部与地板重绘上），而一阶段从零生成 30s 完整舞蹈仅需 **`~5.8 CCU`**。
+- **🚨 强制交互铁律**：当用户说“精修”、“超分”、“做 2K”或要求运行二阶段精修时，**Agent 严禁直接开机或默认跑全幅精修**！必须先向用户提问（优先调用 `ask_question` 工具），展示以下四档方案的耗时与 CCU 成本对比，**必须等待用户明确确认方案后**，再通过 `python3 run_tessera_2k.py --profile <scheme>` 执行对应方案：
+  1. **`local_cas`（推荐日常首选 | `0.00 CCU` | ~25 秒）**：本地 Mac Apple Silicon 调用 `upscale_local_mac_2k.py --mode cas`（高精度 `Lanczos + AMD FidelityFX CAS + Unsharp`），零云端消耗、100% 保留原片五官肤质（或选 `local_esrgan` 调用本地 M 系列 GPU 神经网络超分，约 2.5 分钟，`0.00 CCU`）。
+  2. **`g4_turbo_face`（极速云端 AI 脸部/上半身精修 | 30s 约 `2.0 CCU` / ~12 分钟 | 省 89% 算力）**：G4 仅重绘上半身与脸部 `Tile 0 (1536×1088)` + `segment_frames=124` 单窗直出（共 6 轮采样，下半身保持 Lanczos 2K）。
+  3. **`g4_fast_face`（标准云端 AI 脸部/上半身精修 | 30s 约 `5.8 CCU` / ~34 分钟 | 省 69% 算力）**：G4 仅重绘上半身与脸部 `Tile 0 (1536×1088)` + `segment_frames=56` 时序滑窗（共 18 轮采样）。
+  4. **`g4_optimal`（全幅满血云端 Tessera 2K 母带级精修 | 30s 约 `18.75 CCU` / ~102 分钟）**：G4 上、中、下 3 个分块 × `56 帧` 滑窗全量重采样（共 54 轮采样，全身含裙摆/白袜/地板均做 2K 扩散重绘）。

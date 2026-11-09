@@ -1,6 +1,6 @@
 # 把 Google AI Ultra 1000 CCU 榨出双倍价值（第四弹）：72.1GB 全显存骨干 + 110.6GB 满血 Engram 实测破案！四大版本 2×2 四宫格同屏对决
 
-![把 Google AI Ultra 1000 CCU 榨出双倍价值（第四弹）：72.1GB 全显存骨干 + 110.6GB 满血 Engram 封面](/Users/delroy/.gemini/antigravity/brain/75a9e7bc-8c76-486c-88c6-488189fdbad5/ep4_ds41_cover_5x2.png)
+![把 Google AI Ultra 1000 CCU 榨出双倍价值（第四弹）：72.1GB 全显存骨干 + 110.6GB 满血 Engram 封面](../assets/deepseek_v41_g4/ep4_ds41_cover_5x2.png)
 
 上一篇（第三弹）发出来之后，评论区和群里讨论最热烈的，就是我们在扒「鹈鹕骑自行车」源码时意外抓到的那个名场面——**把 196B 的 Engram 记忆表置零之后，552B 的 MoE 骨干网虽然逆运动学和几何公式算得全对，但写起 HTML 标签来却把 14 处 `<ellipse>` 全部漏写成 `<ellips>`，甚至在把 `theme` 打成 `"theheme"` 之后，因为没法按退格键，当场写了一句 `.replace("theheme","theme")` 强行圆场**。
 
@@ -8,7 +8,7 @@
 
 这两天我正式把这套方案搬上 G4 跑完了全流程实测，还顺手录下了 **四大版本「鹈鹕骑自行车」的 `2×2` 四宫格同屏对决视频**，以及 **方案一初始直出效果 vs 修复微调后的左右横向对比视频**。结果比我预想的还要惊喜——直接用大白话和实测视频给大家交作业！
 
-![把 Google AI Ultra 1000 CCU 榨出双倍价值（第四弹）：单卡 G4 跑通 72.1GB 全显存 + 110.6GB 满血 Engram 四大版本评测总表](/Users/delroy/.gemini/antigravity/brain/75a9e7bc-8c76-486c-88c6-488189fdbad5/ep4_ds41_4way_benchmark_table.png)
+![把 Google AI Ultra 1000 CCU 榨出双倍价值（第四弹）：单卡 G4 跑通 72.1GB 全显存 + 110.6GB 满血 Engram 四大版本评测总表](../assets/deepseek_v41_g4/ep4_ds41_4way_benchmark_table.png)
 
 > **⚡ 先放本期实测跑出来的 3 个核心结论：**
 > 1. **挂上 110.6GB 满血 Engram，速度不仅没掉，反而创下全场最快的 `54.63 tok/s`！** 因为 `72.12 GB` 的代码骨干网（每层精选 192 个核心专家）**100.000% 全部锁死在 96GB GDDR7 显存里**（实测 `2,477,760` 次专家命中，`0` 次走 PCIe 读内存），显存才用了 **`69.5 GiB`（71%）**，还空出 **`28.3 GiB`**；而空出来的 `188 GB DDR5` 主机内存正好把 `110.60 GB` 的真 Engram 100% 缓存进 RAM，全程 **0 磁盘读取、0 Swap**。
@@ -52,7 +52,7 @@
 
 我排查了 GGUF 二进制文件头才发现：官方在打包 `GSQ-RCO-Coder` 的第 1 分片（`00001-of-00004.gguf`）时，**漏写了一条关键元数据 `deepseek41.engram.compressed_vocab_size = 99092`**，导致引擎以为这个模型没有压缩词表，直接把第 4 分片里的 `engram_embd` 张量忽略掉了。
 
-为了不用重新打包 35GB 的大文件，我直接在启动脚本 [`step3_g4_hybrid_stage_and_benchmark.py`](file:///Users/delroy/Documents/Playground/test001/colab-ultra-workstation/scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py) 里写了一个 **5 毫秒就跑完的原地二进制 Header 补丁函数（`patch_coder_shard1_gguf`）**：自动在第一个分片頭部的 Padding 空隙里把 `n_kv` 从 `40` 改成 `41`，并精准注入 `deepseek41.engram.compressed_vocab_size = 99092`，当场救活满血 Engram 挂载！
+为了不用重新打包 35GB 的大文件，我直接在启动脚本 [`step3_g4_hybrid_stage_and_benchmark.py`](../scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py) 里写了一个 **5 毫秒就跑完的原地二进制 Header 补丁函数（`patch_coder_shard1_gguf`）**：自动在第一个分片頭部的 Padding 空隙里把 `n_kv` 从 `40` 改成 `41`，并精准注入 `deepseek41.engram.compressed_vocab_size = 99092`，当场救活满血 Engram 挂载！
 
 ---
 
@@ -67,7 +67,7 @@
 
 全部用无头浏览器按统一节奏录下 10 秒高清动画，拼成了下面这个 **`2×2` 四宫格同屏对比视频**：
 
-![DeepSeek-V4.1 四大版本「鹈鹕骑自行车」2×2 四宫格 10 秒同屏对决](/Users/delroy/.gemini/antigravity/brain/75a9e7bc-8c76-486c-88c6-488189fdbad5/pelican_4way_2x2_comparison.mp4)
+![DeepSeek-V4.1 四大版本「鹈鹕骑自行车」2×2 四宫格 10 秒同屏对决](../assets/deepseek_v41_g4/pelican_4way_2x2_comparison.mp4)
 
 放在 `2×2` 四宫格里同时看，四个版本的性格差异以及 **Engram 置零 vs 满血的直出差距** 简直一目了然：
 1. **左上 `01 官方满血版 FP8`**：走的是清爽简练的扁平矢量风，太阳带旋转光芒、海鸥在天上飞，鹈鹕踩车的比例很协调，但没有做底部交互控制栏。
@@ -83,10 +83,10 @@
 
 为了不留任何滤镜，我专门把方案一 **一字未改的初始直出网页（左）** 和 **仅改了 4 行小瑕疵的修复版网页（右）** 放在一起，录了下面这个 **左右横向同屏对比视频**：
 
-![方案一（GSQ-RCO-Coder + 110.6GB 满血 Engram）初始直出效果 vs 修复微调后左右横向对比视频](/Users/delroy/.gemini/antigravity/brain/75a9e7bc-8c76-486c-88c6-488189fdbad5/pelican_coder_raw_vs_fixed_16x9.mp4)
+![方案一（GSQ-RCO-Coder + 110.6GB 满血 Engram）初始直出效果 vs 修复微调后左右横向对比视频](../assets/deepseek_v41_g4/pelican_coder_raw_vs_fixed_16x9.mp4)
 
 ### 1. 先报喜：110.6GB 满血 Engram 真的实现了「0 英文拼写错误、0 标签漏字母」！
-当我打开方案一生成的 [`pelican_ista_coder_engram.html`](file:///Users/delroy/Documents/Playground/test001/colab-ultra-workstation/scripts/deepseek_g4/examples/pelican_ista_coder_engram.html)（共 686 行代码）逐行检查时，最直观的感受就是——**那个「手部肌肉记忆库」终于回来了！**
+当我打开方案一生成的 [`pelican_ista_coder_engram.html`](../scripts/deepseek_g4/examples/pelican_ista_coder_engram.html)（共 686 行代码）逐行检查时，最直观的感受就是——**那个「手部肌肉记忆库」终于回来了！**
 
 对比上一篇把 Engram 置零时的惨状：
 - 之前 14 处 `<ellipse>` 全部漏字母写成 `<ellips>` 导致白云和眼白消失 → **这次所有的 `<ellipse>`、`<circle>`、`<path>` 标签 100% 拼写正确，左侧初始直出画面里天空的白云、太阳、远山、车轮辐条从第一秒就完整渲染！**
@@ -123,14 +123,14 @@
 
 但当我们进一步往 G4 工作站里塞进需要用浏览器直接访问的 Web 服务（比如 `ComfyUI` 画图面板、`Unsloth Studio` 微调界面或者语音合成面板）时，纯 `Bearer API Key` 网关就有个小痛点：**浏览器地址栏没法手动塞 `Authorization: Bearer` 请求头，直接打开网页会吃闭门羹**。
 
-于是这一期在整合开源项目 [`colabllm`](https://github.com/deluxebear/colabllm) 时，我们在 [`fast_start_g4.sh`](file:///Users/delroy/Documents/Playground/test001/colab-ultra-workstation/scripts/deepseek_g4/fast_start_g4.sh) 里顺手把鉴权层升级成了 **Caddy 双模安全网关（`--auth-caddy`）**：
+于是这一期在整合开源项目 [`colabllm`](https://github.com/deluxebear/colabllm) 时，我们在 [`fast_start_g4.sh`](../scripts/deepseek_g4/fast_start_g4.sh) 里顺手把鉴权层升级成了 **Caddy 双模安全网关（`--auth-caddy`）**：
 - **用客户端调 API 时（`deepseek HARNESS` / Cursor / Cherry Studio）**：和之前一模一样，继续校验你配好的 `Authorization: Bearer sk-g4-...` 密钥，一行客户端配置都不用改；
 - **用浏览器直接打开公网域名看 Web 面板时**：自动弹出 HTTP Basic Auth 密码框，输对一次密码就自动在浏览器种下 `HttpOnly` 的 `ct_session` Cookie，完美兼顾了 API 客户端和浏览器 Web UI！
 
 ### 2. 开启原生 `mmproj-BF16` 视觉看图模式 & 联动 `colabllm` 多模态全家桶
 很多人不知道，**`DeepSeek-V4.1-Flash-1017` 原生就是一颗图文多模态大模型（`image-text-to-text`，在 BabyVision 视觉榜高达 92.5 分）**，三大 GGUF 仓库里都自带了一颗 **`972.2 MB`（`0.91 GiB`）的 `mmproj-DeepSeek-V4.1-Flash-1017-BF16.gguf` 满血视觉投影头**！
 - **为什么平时默认是纯文本？** 因为我们冲刺 `54.6 tok/s` 极速用的 `Delta` 专用引擎目前只跑纯文本主干；
-- **怎么一键开启原生看图写代码（`--vision`）？** 我们在 [`step3_g4_hybrid_stage_and_benchmark.py`](file:///Users/delroy/Documents/Playground/test001/colab-ultra-workstation/scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py) 与 [`fast_start_g4.sh`](file:///Users/delroy/Documents/Playground/test001/colab-ultra-workstation/scripts/deepseek_g4/fast_start_g4.sh) 中内置了自动拉取并挂载 `972.2 MB` `mmproj-BF16.gguf` 的 `--vision` 模式！特别是配合**方案一（`72.12 GB` 主干）**，加上这颗 `0.91 GiB` 的 `BF16` 视觉编码器后总显存也才 **`70.4 GiB`**——在单张 96GB G4 上依然能 **100% 全显存装下「主干 + 原生视觉头」+ 100% 全内存装下「110.6GB 完整 Engram」**，直接在 Cherry Studio / Cursor 里把 UI 设计稿截图或报错截图甩给它就能还原前端代码！
+- **怎么一键开启原生看图写代码（`--vision`）？** 我们在 [`step3_g4_hybrid_stage_and_benchmark.py`](../scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py) 与 [`fast_start_g4.sh`](../scripts/deepseek_g4/fast_start_g4.sh) 中内置了自动拉取并挂载 `972.2 MB` `mmproj-BF16.gguf` 的 `--vision` 模式！特别是配合**方案一（`72.12 GB` 主干）**，加上这颗 `0.91 GiB` 的 `BF16` 视觉编码器后总显存也才 **`70.4 GiB`**——在单张 96GB G4 上依然能 **100% 全显存装下「主干 + 原生视觉头」+ 100% 全内存装下「110.6GB 完整 Engram」**，直接在 Cherry Studio / Cursor 里把 UI 设计稿截图或报错截图甩给它就能还原前端代码！
 
 与此同时，我们还把 [`deluxebear/colabllm`](https://github.com/deluxebear/colabllm) CLI（`0.1.2`）正式整合进了云端工作站体系里。你还可以直接用 `colabllm` 一键在云端拉起：
 - **800K 超长上下文 + 视觉**：`colabllm qwen-flash up`（基于 `Qwen3.8-Flash-Next` + `BF16 mmproj`，适合 80 万 Token 级超长文档与多图混合审阅）；
@@ -140,9 +140,9 @@
 
 # 五、三大 2-Bit 方案最终怎么选？一键开跑命令速查
 
-折腾完第四弹，现在我们在单张 **96GB G4（`10.05 CCU/h`）** 上已经拥有了三套经过完整实机检验的 `DeepSeek-V4.1` 配置，全部集成进了 [`fast_start_g4.sh`](file:///Users/delroy/Documents/Playground/test001/colab-ultra-workstation/scripts/deepseek_g4/fast_start_g4.sh) 里，按你的场景挑一个直接开跑就行：
+折腾完第四弹，现在我们在单张 **96GB G4（`10.05 CCU/h`）** 上已经拥有了三套经过完整实机检验的 `DeepSeek-V4.1` 配置，全部集成进了 [`fast_start_g4.sh`](../scripts/deepseek_g4/fast_start_g4.sh) 里，按你的场景挑一个直接开跑就行：
 
-![单卡 96GB G4 三大 2-Bit 旗舰方案终极选型与一键热切换总表](/Users/delroy/.gemini/antigravity/brain/75a9e7bc-8c76-486c-88c6-488189fdbad5/ep4_ds41_fig5_3way_selection_table.png)
+![单卡 96GB G4 三大 2-Bit 旗舰方案终极选型与一键热切换总表](../assets/deepseek_v41_g4/ep4_ds41_fig5_3way_selection_table.png)
 
 1. **写代码 / 画前端 SVG / 跑 Agent 首选（强烈推荐 🏆）—— `ista-coder-engram`**
    - **配置**：`72.12 GB` 代码骨干（100% 进显存，还剩 `28.3 GiB` 空闲显存）+ `110.60 GB` 完整 `IQ4_NL` Engram（100% 进 DDR5 内存）。

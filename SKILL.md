@@ -68,8 +68,15 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
    - **`colab-mcp` 网页模式**：运行 `python3 scripts/mcp_dfs_mount.py` 生成载荷执行，挂载成功后立即运行 `python3 scripts/mcp_dfs_mount.py --sanitize` 擦除单元格中的明文 Token。
    - **路径兼容**：自动建立软链接 `os.symlink("/content/drive/My Drive", "/content/drive/MyDrive")`。
 
-3. **跨档位通用防浪费与防断连四原则（Zero-Burn & Anti-Idle Core Rules）**：
+3. **跨档位通用防浪费与防断连五原则（Zero-Burn & Anti-Idle Core Rules）**：
    - **本地 `0 CCU` 备料**：所有提示词编排、配置修改与首帧素材准备必须在启动高价 GPU 前在本地完成。
+   - **🚨 视频二阶段「精修 / 2K 超分」强制交互确认门禁（Mandatory Refinement Gate）**：
+     - 当用户提出“精修”、“超分”、“2K/4K 高清化”或运行二阶段 `run_tessera_2k.py` 时，**Agent 严禁直接启动云端 GPU 或擅自默认跑全幅精修**！
+     - Agent **必须先向用户提问（优先调用 `ask_question` 工具）**，明确列出以下四档方案及各自预估耗时与算力消耗，**必须等待用户明确选择确认后**，再传参 `--profile <scheme>` 执行对应方案：
+       1. **`local_cas`（推荐日常首选 · `0.00 CCU` · 约 25 秒）**：本地 Mac Apple Silicon `Lanczos + FidelityFX CAS` 自适应锐化 2K（另有 `local_esrgan` 本地 M 系列 GPU 神经网络超分，约 2.5 分钟，`0.00 CCU`）。
+       2. **`g4_turbo_face`（极速云端 AI 脸部/上半身精修 · 30s 约 `2.0 CCU` / ~12 分钟 · 省 89% 算力）**：G4 仅重绘上半身与脸部 `Tile 0 (1536×1088)` + `124 帧` 单窗直出（共 6 轮采样，下半身 Lanczos 2K）。
+       3. **`g4_fast_face`（标准云端 AI 脸部/上半身精修 · 30s 约 `5.8 CCU` / ~34 分钟 · 省 69% 算力）**：G4 仅重绘上半身与脸部 `Tile 0 (1536×1088)` + `56 帧` 时序滑窗（共 18 轮采样）。
+       4. **`g4_optimal`（全幅满血云端 Tessera 2K 母带级精修 · 30s 约 `18.75 CCU` / ~102 分钟）**：G4 上、中、下 3 个分块 × `56 帧` 滑窗全量重采样（共 54 轮采样）。
    - **严禁在 FUSE 云盘路径直接 `mmap` 大模型**：FUSE 随机读仅 `~25 MB/s` 且受 `112 GiB` 缓存上限限制；必须通过并发 Google Drive v3 API 或 HuggingFace CDN 将核心权重直灌本地 NVMe SSD（`/content/fast_*`）。
    - **长耗时任务强制 `nohup` 脱机启动**：超过 15 秒的远程任务一律用 `nohup ... > /tmp/task.log 2>&1 &` 后台拉起，再用 `alarm` 超时轮询日志，防止 WebSocket 断连卡死。
    - **API / 隧道常驻服务强制挂载「10 分钟 Jupyter 内核防休眠保活守护进程 (`colab_keepalive_<session>`)」**：
@@ -96,14 +103,16 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
 
 为保持主技能轻量高效，请根据用户的具体任务按需读取以下专项文档（未涉及对应领域时无需加载）：
 
-- **单卡 96GB G4 部署与评测 748B `DeepSeek-V4.1-Flash-1017`（2-Bit 双模型网关 & Engram 置零排障）**：
-  - 当用户要求在 G4 上运行 `DeepSeek-V4.1-Flash`、切换 `Unsloth UD-IQ2_XXS` / `Abiray GSQ-RCO IQ2_XXS`、配置 `fast_start_g4.sh` 或排查 Engram 置零导致的拼写/SVG 瑕疵时，读取 **[`references/deepseek_v41_748b_g4_guide.md`](references/deepseek_v41_748b_g4_guide.md)** 及脚本说明 **[`scripts/deepseek_g4/README.md`](scripts/deepseek_g4/README.md)**。
-- **MiniMax-H3 视频生成、双擎云端 TTS (`Qwen3-TTS` + `IndexTTS-2`) 与潜变量续跑操作铁律**：
-  - 当用户使用 G4 生成 `MiniMax-H3` 短剧/动作长镜头、配置 `F = 17k + 5` 帧数、合成配音、使用 `SaveLatent/LoadLatent` 断点续跑或压制自动字幕时，**必须先读取 [`references/minimax_h3_zero_waste_sop.md`](references/minimax_h3_zero_waste_sop.md)**（包含完整的铁律 A ~ G）。
+- **单卡 96GB G4 部署与评测 748B `DeepSeek-V4.1-Flash-1017`（72.1GB 全显存 + 110.6GB 满血 Engram / 双模型网关 / 原生视觉）**：
+  - 当用户要求在 G4 上运行 `DeepSeek-V4.1-Flash`、切换 `ista-coder-iq2xxs` (`54.63 tok/s` 满血 Engram) / `Unsloth UD-IQ2_XXS` / `Abiray GSQ-RCO IQ2_XXS`、开启 `--vision` 原生视觉或配置 `fast_start_g4.sh` 时，读取 **[`references/deepseek_v41_g4_ep4_full_engram_guide.md`](references/deepseek_v41_g4_ep4_full_engram_guide.md)**、**[`references/deepseek_v41_748b_g4_guide.md`](references/deepseek_v41_748b_g4_guide.md)** 及脚本说明 **[`scripts/deepseek_g4/README.md`](scripts/deepseek_g4/README.md)**。
+- **MiniMax-H3 视频生成、双擎云端 TTS (`Qwen3-TTS` + `IndexTTS-2`)、潜变量续跑与二阶段精修门禁操作铁律**：
+  - 当用户使用 G4 生成 `MiniMax-H3` 短剧/动作/舞蹈长镜头、配置 `F = 17k + 5` 帧数、合成配音、使用 `SaveLatent/LoadLatent` 断点续跑、执行二阶段 2K 精修或压制自动字幕时，**必须先读取 [`references/minimax_h3_zero_waste_sop.md`](references/minimax_h3_zero_waste_sop.md)**（包含完整的铁律 A ~ H）。
+- **9:16 竖屏 15s/30s 抖音热舞、2,767 行动作链标准件库与多档位 2K 精修套件**：
+  - 当用户制作 9:16 竖屏舞蹈视频、调用动作链库或执行 `run_dance.py` / `run_tessera_2k.py` 时，读取 **[`workflows/04_douyin_beauty_dance/README.md`](workflows/04_douyin_beauty_dance/README.md)** 与 **[`workflows/04_douyin_beauty_dance/references/dance-motion-chain-h3.md`](workflows/04_douyin_beauty_dance/references/dance-motion-chain-h3.md)**。
 - **MiniMax-H3 工业级双轨架构与多角色一致性深度白皮书**：
   - 当需要深入了解方案 A/B 架构、22 帧潜空间接力、`H3 Join Match` 手动参数、`Self-Anchor Voice` 原生自锚定声纹或 `V3 ProSeam` 武指分镜语法时，读取 **[`references/minimax_h3_industrial_workflow_whitepaper.md`](references/minimax_h3_industrial_workflow_whitepaper.md)**。
 - **MiniMax-H3 无审核破限版与 ComfyUI 节点搭建指南**：
-  - 当用户首次搭建 `MiniMax-H3` + `Qwen3-VL-32B-Ultra-Heretic` 无审核编码器或配置 2K 视频超分时，读取 **[`references/minimax_h3_uncensored_comfyui_guide.md`](references/minimax_h3_uncensored_comfyui_guide.md)**。
+  - 当用户首次搭建 `MiniMax-H3` + `Qwen3-VL-32B-Ultra-Heretic` 无审核编码器或配置 2K 视频超分节点图时，读取 **[`references/minimax_h3_uncensored_comfyui_guide.md`](references/minimax_h3_uncensored_comfyui_guide.md)**。
 
 ## 6. 与 `colabllm` CLI 及技能的协同调度规范 (Dual-Skill Synergy)
 

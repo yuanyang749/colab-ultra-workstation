@@ -118,8 +118,9 @@ def find_asset_file(fname: str) -> Optional[Path]:
         script_dir / "bgm_library" / fname,
         script_dir / "sample_inputs" / fname,
         script_dir / "inputs" / fname,
-        script_dir.parents[2] / "local_debug_workspace" / "01_douyin_dance_catgirl_15s" / "inputs" / fname,
     ]
+    if len(script_dir.parents) > 2:
+        candidates.append(script_dir.parents[2] / "local_debug_workspace" / "01_douyin_dance_catgirl_15s" / "inputs" / fname)
     return next((p for p in candidates if p.exists()), None)
 
 
@@ -255,7 +256,9 @@ def auto_prepare_audio_and_beat_tokens(
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            if s_id == 1:
+            if len(orig_segs) == n_total and (s_id - 1) < len(orig_segs):
+                sc = copy.deepcopy(orig_segs[s_id - 1])
+            elif s_id == 1:
                 sc = copy.deepcopy(seg1_tmpl)
             elif s_id == n_total:
                 sc = copy.deepcopy(seg_last_tmpl)

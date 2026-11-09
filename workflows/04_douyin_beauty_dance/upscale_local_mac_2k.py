@@ -17,8 +17,14 @@ import time
 from pathlib import Path
 
 WORKFLOW_DIR = Path(__file__).resolve().parent
-ESRGAN_BIN = WORKFLOW_DIR / "tools" / "realesrgan-mac" / "realesrgan-ncnn-vulkan"
-ESRGAN_MODELS = WORKFLOW_DIR / "tools" / "realesrgan-mac" / "models"
+CANDIDATE_TOOL_DIRS = [
+    WORKFLOW_DIR / "tools" / "realesrgan-mac",
+    WORKFLOW_DIR.parents[2] / "local_debug_workspace" / "01_douyin_dance_catgirl_15s" / "tools" / "realesrgan-mac",
+    Path("/Users/delroy/Documents/Playground/test001/local_debug_workspace/01_douyin_dance_catgirl_15s/tools/realesrgan-mac"),
+]
+ESRGAN_DIR = next((d for d in CANDIDATE_TOOL_DIRS if (d / "realesrgan-ncnn-vulkan").exists()), CANDIDATE_TOOL_DIRS[0])
+ESRGAN_BIN = ESRGAN_DIR / "realesrgan-ncnn-vulkan"
+ESRGAN_MODELS = ESRGAN_DIR / "models"
 
 
 def upscale_cas(input_mp4: Path, output_mp4: Path, width: int = 1536, height: int = 2688, cas_strength: float = 0.65):
@@ -69,14 +75,19 @@ def upscale_esrgan_hybrid(input_mp4: Path, output_mp4: Path, width: int = 1536, 
             ],
             check=True,
         )
+        filter_complex = (
+            f"[0:v]scale={width}:{height}:flags=lanczos,format=yuv420p[esr];"
+            f"[1:v]scale={width}:{height}:flags=lanczos+accurate_rnd+full_chroma_int,cas=strength=0.60,format=yuv420p[cas];"
+            f"[cas][esr]blend=all_mode=normal:all_opacity=0.45,cas=strength=0.40,unsharp=5:5:0.35:3:3:0.0[vout]"
+        )
         subprocess.run(
             [
                 "ffmpeg", "-y",
                 "-framerate", "24",
                 "-i", str(out_frames / "frame_%05d.jpg"),
                 "-i", str(input_mp4),
-                "-vf", f"scale={width}:{height}:flags=lanczos,cas=strength=0.45",
-                "-map", "0:v:0", "-map", "1:a:0",
+                "-filter_complex", filter_complex,
+                "-map", "[vout]", "-map", "1:a:0",
                 "-c:v", "libx264", "-crf", "16", "-preset", "fast", "-pix_fmt", "yuv420p",
                 "-c:a", "copy", "-shortest",
                 str(output_mp4),

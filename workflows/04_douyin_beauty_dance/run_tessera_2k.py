@@ -16,9 +16,50 @@ DRIVE_COMFY = Path("/content/drive/MyDrive/AI_Workstation/ComfyUI")
 FAST_MODELS = Path("/content/fast_models")
 LOCAL_COMFY = Path("/content/ComfyUI")
 
-# Pluggable hardware profiles (Default: g4_optimal for 96GB RTX PRO 6000 Blackwell)
+# Pluggable Stage-2 2K Refinement Profiles (Requires explicit user scheme selection!)
 PROFILES = {
+    "local_cas": {
+        "engine": "local_mac",
+        "mode": "cas",
+        "cas_strength": 0.65,
+        "est_ccu_30s": "0.00 CCU (~25s on Mac)",
+        "suffix": "Local2K_CAS",
+    },
+    "local_esrgan": {
+        "engine": "local_mac",
+        "mode": "esrgan",
+        "cas_strength": 0.45,
+        "est_ccu_30s": "0.00 CCU (~2.5min on Mac M-series GPU)",
+        "suffix": "Local2K_ESRGAN",
+    },
+    "g4_turbo_face": {
+        "engine": "cloud_tessera",
+        "spatial_tile": "custom",
+        "tile_width": 1536,
+        "tile_height": 1088,
+        "segment_frames": 124,
+        "tile_select": "0",
+        "tile_limit": 1,
+        "lms_lora_strength": 0.42,
+        "guide_release": 0.55,
+        "est_ccu_30s": "~2.0 CCU (~12min on G4, 6 passes, Upper-Body/Face Tile 0 only)",
+        "suffix": "Tessera2K_TurboFace",
+    },
+    "g4_fast_face": {
+        "engine": "cloud_tessera",
+        "spatial_tile": "custom",
+        "tile_width": 1536,
+        "tile_height": 1088,
+        "segment_frames": 56,
+        "tile_select": "0",
+        "tile_limit": 1,
+        "lms_lora_strength": 0.42,
+        "guide_release": 0.55,
+        "est_ccu_30s": "~5.8 CCU (~34min on G4, 18 passes, Upper-Body/Face Tile 0 only)",
+        "suffix": "Tessera2K_FastFace",
+    },
     "g4_optimal": {
+        "engine": "cloud_tessera",
         "spatial_tile": "custom",
         "tile_width": 1536,
         "tile_height": 1088,
@@ -27,18 +68,11 @@ PROFILES = {
         "tile_limit": 0,
         "lms_lora_strength": 0.42,
         "guide_release": 0.55,
-    },
-    "g4_fast_face": {
-        "spatial_tile": "custom",
-        "tile_width": 1536,
-        "tile_height": 1088,
-        "segment_frames": 56,
-        "tile_select": "0",
-        "tile_limit": 1,
-        "lms_lora_strength": 0.42,
-        "guide_release": 0.55,
+        "est_ccu_30s": "~18.75 CCU (~102min on G4, 54 passes, Full-Frame 3 Tiles)",
+        "suffix": "Tessera2K",
     },
     "local_32g": {
+        "engine": "cloud_tessera",
         "spatial_tile": "med_vram",
         "tile_width": 768,
         "tile_height": 768,
@@ -47,8 +81,11 @@ PROFILES = {
         "tile_limit": 1,
         "lms_lora_strength": 0.42,
         "guide_release": 0.55,
+        "est_ccu_30s": "0.00 CCU (Local 32GB RTX 5090)",
+        "suffix": "Tessera2K_Local32G",
     },
     "local_24g": {
+        "engine": "cloud_tessera",
         "spatial_tile": "low_vram",
         "tile_width": 640,
         "tile_height": 640,
@@ -57,14 +94,60 @@ PROFILES = {
         "tile_limit": 1,
         "lms_lora_strength": 0.42,
         "guide_release": 0.55,
+        "est_ccu_30s": "0.00 CCU (Local 24GB RTX 3090/4090)",
+        "suffix": "Tessera2K_Local24G",
     },
 }
-ACTIVE_PROFILE_NAME = os.environ.get("TESSERA_PROFILE", "g4_optimal")
+
+ACTIVE_PROFILE_NAME = os.environ.get("TESSERA_PROFILE", "").strip()
+INPUT_OVERRIDE = None
+OUTPUT_OVERRIDE = None
 for i, arg in enumerate(sys.argv[1:]):
-    if arg == "--profile" and i + 2 < len(sys.argv):
+    if arg == "--profile" and i + 2 <= len(sys.argv):
         ACTIVE_PROFILE_NAME = sys.argv[i + 2]
+    elif arg.startswith("--profile="):
+        ACTIVE_PROFILE_NAME = arg.split("=", 1)[1]
+    elif arg in ("--input", "-i") and i + 2 <= len(sys.argv):
+        INPUT_OVERRIDE = sys.argv[i + 2]
+    elif arg in ("--output", "-o") and i + 2 <= len(sys.argv):
+        OUTPUT_OVERRIDE = sys.argv[i + 2]
+
+if not ACTIVE_PROFILE_NAME or ACTIVE_PROFILE_NAME not in PROFILES:
+    print(
+        "\n🛑 [MANDATORY REFINEMENT GATE] 未指定二阶段精修方案 (--profile)！\n"
+        "为防止误跑高消耗云端全幅精修，Agent 必须先向用户提问确认使用以下哪种精修方案：\n"
+        "  1. --profile local_cas      : [推荐日常首选 | 0.00 CCU | ~25秒] 本地 Mac Lanczos + FidelityFX CAS 自适应锐化 2K (1536x2688)\n"
+        "  2. --profile local_esrgan   : [本地神经网络 | 0.00 CCU | ~2.5分钟] 本地 Mac M系列 GPU Real-ESRGAN + CAS 混合 2K\n"
+        "  3. --profile g4_turbo_face  : [极速云端脸部精修 | 30s约 2.0 CCU (~12分钟) | 省89%算力] 仅重绘上半身/脸部 Tile 0 + 124帧单窗直出 (6轮采样)\n"
+        "  4. --profile g4_fast_face   : [标准云端脸部精修 | 30s约 5.8 CCU (~34分钟) | 省69%算力] 仅重绘上半身/脸部 Tile 0 + 56帧滑窗 (18轮采样)\n"
+        "  5. --profile g4_optimal     : [全幅满血母带精修 | 30s约 18.75 CCU (~102分钟)] 全画幅上中下3分块 × 56帧滑窗 (54轮采样)\n",
+        flush=True,
+    )
+    sys.exit(2)
+
 ACTIVE_PROFILE = PROFILES[ACTIVE_PROFILE_NAME]
-print(f"⚙️ Active Stage-2 Tessera Profile: {ACTIVE_PROFILE_NAME} -> {ACTIVE_PROFILE}", flush=True)
+print(f"⚙️ Active Stage-2 Refinement Scheme: {ACTIVE_PROFILE_NAME} -> {ACTIVE_PROFILE}", flush=True)
+
+if ACTIVE_PROFILE.get("engine") == "local_mac":
+    local_script = Path(__file__).resolve().parent / "upscale_local_mac_2k.py"
+    if not INPUT_OVERRIDE:
+        default_in = Path(__file__).resolve().parent / "outputs" / "V15_30s_XOrig" / "DouyinDance_RealGirlV3_30s_V15_XOrig_OfficialBase.mp4"
+        INPUT_OVERRIDE = str(default_in)
+    if not OUTPUT_OVERRIDE:
+        in_p = Path(INPUT_OVERRIDE)
+        stem = in_p.stem.replace("_OfficialBase", "")
+        OUTPUT_OVERRIDE = str(in_p.parent / f"{stem}_{ACTIVE_PROFILE['suffix']}_1536x2688.mp4")
+    cmd = [
+        sys.executable,
+        str(local_script),
+        "--input", str(INPUT_OVERRIDE),
+        "--output", str(OUTPUT_OVERRIDE),
+        "--mode", ACTIVE_PROFILE["mode"],
+        "--cas-strength", str(ACTIVE_PROFILE.get("cas_strength", 0.65)),
+    ]
+    print(f"🚀 Executing 0-CCU Local Mac 2K Refinement: {' '.join(cmd)}", flush=True)
+    subprocess.run(cmd, check=True)
+    sys.exit(0)
 
 
 def run_cmd(cmd):
@@ -180,61 +263,109 @@ NODE_DISPLAY_NAME_MAPPINGS["TesseraSigmas"] = "Tessera Sigmas"
 """
 nodes_py.write_text(nodes_txt)
 
-# 4. Stage inputs & slice V15_S1 (362f) into 3 exact 124-frame (17*7+5) segments with 5-frame overlap:
-# Seg 1: frames 0..123 (0.000s - 5.1667s)
-# Seg 2: frames 119..242 (4.9583s - 10.1250s)
-# Seg 3: frames 238..361 (9.9167s - 15.0833s)
+# 4. Stage inputs & slice Stage-1 base video into exact 124-frame (17*7+5) segments:
 inp_dir = LOCAL_COMFY / "input"
 inp_dir.mkdir(parents=True, exist_ok=True)
-v15_src = DRIVE_COMFY / "output" / "20261031_DouyinDance_CatGirl_15s" / "V15_S1_OfficialBase" / "DouyinDance_RealGirlV3_15s_V15_S1_OfficialBase.mp4"
+
+mode_30s = "--mode=15s" not in sys.argv
+prof_suffix = ACTIVE_PROFILE.get("suffix", "Tessera2K")
+v15_xorig_cand = DRIVE_COMFY / "output" / "20261031_DouyinDance_CatGirl_15s" / "V15_30s_XOrig" / "DouyinDance_RealGirlV3_30s_V15_XOrig_OfficialBase.mp4"
+v15_30s_cand = DRIVE_COMFY / "output" / "20261031_DouyinDance_CatGirl_15s" / "V15_30s_Full" / "DouyinDance_RealGirlV3_30s_V15_Full_OfficialBase.mp4"
+v15_15s_cand = DRIVE_COMFY / "output" / "20261031_DouyinDance_CatGirl_15s" / "V15_S1_OfficialBase" / "DouyinDance_RealGirlV3_15s_V15_S1_OfficialBase.mp4"
+
+if mode_30s and v15_xorig_cand.exists():
+    v15_src = v15_xorig_cand
+    bgm_filename = "polite_greeting_master_30s.wav"
+    out_subdir_name = "V15_30s_XOrig"
+    out_2k_name = f"DouyinDance_RealGirlV3_30s_V15_XOrig_{prof_suffix}_1536x2688.mp4"
+    # 702 frames (29.25s @ 24fps) covered by 6 chunks of 124 frames:
+    seg_defs = [
+        (1, 0, 124),
+        (2, 119, 124),
+        (3, 238, 124),
+        (4, 357, 124),
+        (5, 476, 124),
+        (6, 578, 124),
+    ]
+elif mode_30s and v15_30s_cand.exists():
+    v15_src = v15_30s_cand
+    bgm_filename = "polite_greeting_master_30s.wav"
+    out_subdir_name = "V15_30s_Full"
+    out_2k_name = f"DouyinDance_RealGirlV3_30s_V15_Full_{prof_suffix}_1536x2688.mp4"
+    seg_defs = [
+        (1, 0, 124),
+        (2, 119, 124),
+        (3, 238, 124),
+        (4, 357, 124),
+        (5, 476, 124),
+        (6, 578, 124),
+    ]
+else:
+    v15_src = v15_15s_cand
+    bgm_filename = "master_bgm_15s.wav"
+    out_subdir_name = "V15_S1_Tessera2K"
+    out_2k_name = f"DouyinDance_RealGirlV3_15s_V15_S1_{prof_suffix}_1536x2688.mp4"
+    # 362 frames (15.083s @ 24fps) covered by 3 chunks of 124 frames:
+    seg_defs = [
+        (1, 0, 124),
+        (2, 119, 124),
+        (3, 238, 124),
+    ]
+
+print(f"🎞️ Tessera 2K Source: {v15_src} ({len(seg_defs)} x 124f chunks)", flush=True)
 shutil.copy2(v15_src, inp_dir / "v15_s1_full.mp4")
 
-for fn in ["ref_realgirl_v3_2k.png", "master_bgm_15s.wav"]:
+for fn in ["ref_realgirl_v3_2k.png", bgm_filename]:
     for cand in [
         DRIVE_COMFY / "input" / fn,
         Path("/content/drive/MyDrive/AI_Workstation/workflows/04_douyin_beauty_dance/inputs") / fn,
+        Path("/tmp") / fn,
     ]:
         if cand.exists():
             shutil.copy2(cand, inp_dir / fn)
             break
 
-seg_defs = [
-    (1, 0, 124),
-    (2, 119, 124),
-    (3, 238, 124),
-]
 for sid, f_start, f_cnt in seg_defs:
     seg_mp4 = inp_dir / f"v15_s1_seg{sid}.mp4"
     t_ss = f_start / 24.0
-    t_dur = f_cnt / 24.0
+    t_end = (f_start + f_cnt) / 24.0
     run_cmd([
         "ffmpeg", "-y", "-i", str(inp_dir / "v15_s1_full.mp4"),
-        "-ss", f"{t_ss:.6f}", "-t", f"{t_dur:.6f}",
-        "-vf", f"fps=24,trim=start_frame=0:end_frame={f_cnt},setpts=PTS-STARTPTS",
-        "-af", f"atrim=0:{t_dur:.6f},asetpts=PTS-STARTPTS",
+        "-vf", f"fps=24,trim=start_frame={f_start}:end_frame={f_start + f_cnt},setpts=PTS-STARTPTS",
+        "-af", f"atrim={t_ss:.6f}:{t_end:.6f},asetpts=PTS-STARTPTS",
         "-c:v", "libx264", "-crf", "12", "-preset", "fast",
         "-c:a", "aac", "-b:a", "192k",
         str(seg_mp4),
     ])
 
-# 5. Restart ComfyUI WITHOUT --highvram so Qwen3-VL 32B unloads cleanly after conditioning, leaving full 96GB VRAM for UNET + VAE
-print("🔄 Starting ComfyUI on 127.0.0.1:8188 (--disable-mmap --fast)...", flush=True)
-subprocess.run(["pkill", "-f", "python.*main.py"], check=False)
-time.sleep(2)
+# 5. Start ComfyUI WITHOUT --highvram so Qwen3-VL 32B unloads cleanly after conditioning, leaving full 96GB VRAM for UNET + VAE
 log_path = Path("/tmp/comfyui_tessera.log")
-log_f = open(log_path, "w")
-subprocess.Popen(
-    [sys.executable, "main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-mmap", "--fast"],
-    cwd=str(LOCAL_COMFY),
-    stdout=log_f,
-    stderr=subprocess.STDOUT,
-)
-for _ in range(90):
-    try:
-        urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=2)
-        break
-    except Exception:
-        time.sleep(2)
+tessera_ready = False
+try:
+    info = json.loads(urllib.request.urlopen("http://127.0.0.1:8188/object_info/TesseraRefine", timeout=2).read().decode())
+    tessera_ready = "TesseraRefine" in info
+except Exception:
+    tessera_ready = False
+
+if not tessera_ready:
+    print("🔄 Starting ComfyUI on 127.0.0.1:8188 (--disable-mmap --fast)...", flush=True)
+    subprocess.run(["pkill", "-f", "python.*main.py"], check=False)
+    time.sleep(2)
+    log_f = open(log_path, "w")
+    subprocess.Popen(
+        [sys.executable, "main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-mmap", "--fast"],
+        cwd=str(LOCAL_COMFY),
+        stdout=log_f,
+        stderr=subprocess.STDOUT,
+    )
+    for _ in range(90):
+        try:
+            urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=2)
+            break
+        except Exception:
+            time.sleep(2)
+else:
+    print("⚡ ComfyUI (TesseraRefine) already warm on 127.0.0.1:8188!", flush=True)
 
 
 def run_segment_tessera(sid: int, seg_mp4_name: str, anchor_img_name: str) -> Path:
@@ -457,7 +588,7 @@ def run_segment_tessera(sid: int, seg_mp4_name: str, anchor_img_name: str) -> Pa
     )
     resp = json.loads(urllib.request.urlopen(req, timeout=15).read().decode())
     pid = resp["prompt_id"]
-    print(f"\n🎬 [Seg {sid}/3] TesseraRefine 2K (1536x2688, 124f) Queued! prompt_id={pid}", flush=True)
+    print(f"\n🎬 [Seg {sid}/{len(seg_defs)}] TesseraRefine 2K (1536x2688, 124f) Queued! prompt_id={pid}", flush=True)
     t0 = time.time()
     last_line = ""
     while True:
@@ -481,48 +612,65 @@ def run_segment_tessera(sid: int, seg_mp4_name: str, anchor_img_name: str) -> Pa
     cands = sorted((LOCAL_COMFY / "output").glob(f"{prefix}*.mp4"), key=lambda p: p.stat().st_mtime)
     assert cands, f"No output MP4 found for {prefix}!"
     out_p = cands[-1]
-    print(f"✅ [Seg {sid}/3] Done in {time.time()-t0:.1f}s -> {out_p.name} ({out_p.stat().st_size/1e6:.2f} MB)", flush=True)
+    print(f"✅ [Seg {sid}/{len(seg_defs)}] Done in {time.time()-t0:.1f}s -> {out_p.name} ({out_p.stat().st_size/1e6:.2f} MB)", flush=True)
     return out_p
 
 
+out_drv_dir = DRIVE_COMFY / "output" / "20261031_DouyinDance_CatGirl_15s" / out_subdir_name
+out_drv_dir.mkdir(parents=True, exist_ok=True)
+
 seg_outputs = []
 cur_anchor = "ref_realgirl_v3_2k.png"
-for sid, f_start, f_cnt in seg_defs:
-    out_mp4 = run_segment_tessera(sid, f"v15_s1_seg{sid}.mp4", cur_anchor)
+for idx, (sid, f_start, f_cnt) in enumerate(seg_defs):
+    cached_seg = out_drv_dir / f"{prof_suffix}_Seg{sid:02d}.mp4"
+    if cached_seg.exists() and cached_seg.stat().st_size > 2_000_000:
+        print(f"⚡ Reusing completed 2K segment: {cached_seg.name} ({cached_seg.stat().st_size/1e6:.2f} MB)", flush=True)
+        out_mp4 = cached_seg
+    else:
+        out_mp4 = run_segment_tessera(sid, f"v15_s1_seg{sid}.mp4", cur_anchor)
+        shutil.copy2(out_mp4, cached_seg)
     seg_outputs.append(out_mp4)
-    if sid < 3:
-        # Extract frame 119 (the exact start frame of the next segment!) as the 2K anchor for the next segment
+    if idx + 1 < len(seg_defs):
+        next_f_start = seg_defs[idx + 1][1]
+        local_anchor_frame = next_f_start - f_start
         next_anchor = inp_dir / f"anchor_seg{sid+1}.png"
         run_cmd([
             "ffmpeg", "-y", "-i", str(out_mp4),
-            "-vf", "select=eq(n\\,119)", "-frames:v", "1",
+            "-vf", f"select=eq(n\\,{local_anchor_frame})", "-frames:v", "1",
             str(next_anchor),
         ])
         cur_anchor = next_anchor.name
 
-# Stitch the 3 refined 2K (1536x2688) 124-frame segments with 5-frame (0.208333s) crossfades + lossless master_bgm_15s.wav
-out_drv_dir = DRIVE_COMFY / "output" / "20261031_DouyinDance_CatGirl_15s" / "V15_S1_Tessera2K"
-out_drv_dir.mkdir(parents=True, exist_ok=True)
-final_mp4 = out_drv_dir / "DouyinDance_RealGirlV3_15s_V15_S1_Tessera2K_1536x2688.mp4"
-bgm_wav = inp_dir / "master_bgm_15s.wav"
+# Stitch all refined 2K (1536x2688) 124-frame segments with exact crossfades + lossless master BGM
+final_mp4 = out_drv_dir / out_2k_name
+tmp_final_mp4 = Path("/tmp") / out_2k_name
+bgm_wav = inp_dir / bgm_filename
 
-ov = 5.0 / 24.0  # 0.208333s
-off1 = (124 - 5) / 24.0  # 4.958333s
-off2 = (124 - 5 + 124 - 5) / 24.0  # 9.916667s
+ff_inputs = []
+for p in seg_outputs:
+    ff_inputs.extend(["-i", str(p)])
+ff_inputs.extend(["-i", str(bgm_wav)])
+
+xfade_parts = []
+prev_label = "[0:v]"
+for i in range(1, len(seg_defs)):
+    prev_end_f = seg_defs[i - 1][1] + seg_defs[i - 1][2]
+    cur_start_f = seg_defs[i][1]
+    ov_s = (prev_end_f - cur_start_f) / 24.0
+    off_s = cur_start_f / 24.0
+    out_label = "[vout]" if i == len(seg_defs) - 1 else f"[v0{i}]"
+    xfade_parts.append(f"{prev_label}[{i}:v]xfade=transition=fade:duration={ov_s:.6f}:offset={off_s:.6f}{out_label}")
+    prev_label = out_label
 
 run_cmd([
     "ffmpeg", "-y",
-    "-i", str(seg_outputs[0]),
-    "-i", str(seg_outputs[1]),
-    "-i", str(seg_outputs[2]),
-    "-i", str(bgm_wav),
-    "-filter_complex",
-    f"[0:v][1:v]xfade=transition=fade:duration={ov:.6f}:offset={off1:.6f}[v01];"
-    f"[v01][2:v]xfade=transition=fade:duration={ov:.6f}:offset={off2:.6f}[vout]",
-    "-map", "[vout]", "-map", "3:a:0",
-    "-c:v", "libx264", "-crf", "17", "-preset", "fast", "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-b:a", "192k", "-shortest",
-    str(final_mp4),
+    *ff_inputs,
+    "-filter_complex", ";".join(xfade_parts),
+    "-map", "[vout]", "-map", f"{len(seg_outputs)}:a:0",
+    "-c:v", "libx264", "-crf", "16", "-preset", "fast", "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-b:a", "256k", "-shortest",
+    str(tmp_final_mp4),
 ])
+shutil.copy2(tmp_final_mp4, final_mp4)
 os.sync()
-print(f"🎉 ALL 3 SEGMENTS STITCHED & SYNCED TO DRIVE: {final_mp4} ({final_mp4.stat().st_size / 1e6:.2f} MB)", flush=True)
+print(f"🎉 ALL {len(seg_defs)} SEGMENTS STITCHED & SYNCED TO DRIVE:\n  Raw Tessera 2K: {final_mp4} ({final_mp4.stat().st_size / 1e6:.2f} MB)", flush=True)

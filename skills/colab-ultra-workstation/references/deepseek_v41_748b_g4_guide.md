@@ -1,6 +1,6 @@
 # 把 Google AI Ultra 1000 CCU 榨出双倍价值（第三弹）：用单卡 96GB G4 跑通 748B DeepSeek-V4.1 折腾实录
 
-![把 Google AI Ultra 1000 CCU 榨出双倍价值（第三弹）：Colab G4 单卡驯服 748B DeepSeek-V4.1 封面](../assets/deepseek_v41_g4/ep3_ds41_cover_16x9.png)
+![把 Google AI Ultra 1000 CCU 榨出双倍价值（第三弹）：Colab G4 单卡驯服 748B DeepSeek-V4.1 封面](../assets/deepseek_v41_g4/ep3_ds41_cover_5x2.png)
 
 前两篇发完之后，不少朋友跟着把 Google Drive 20TB 云盘挂上了，也用 Colab 新出的 **G4 实例（RTX PRO 6000 Blackwell，96GB 显存，现在实时费率涨到了每小时 `10.05 CCU`）** 跑通了 33B 的视频模型。
 
@@ -78,9 +78,9 @@
 
 光看跑分没意思，我直接拿 AI 圈最经典的那道「**用 SVG 画一只骑自行车的鹈鹕**」来溜溜它们（再强调一次：两个版本都是在 Engram 置零的状态下跑的）。这题贼损，因为模型既得知道鹈鹕那标志性的大嘴兜长啥样，又得把自行车架画对，还得算明白两条腿怎么跟着脚踏板转圈。
 
-我把 **① 官方满血版演示**、**② Abiray `IQ2_XXS`** 和 **③ Unsloth `UD-IQ2_XXS`** 生成出来的网页用无头浏览器各录了 10 秒视频，拼成了 **上、中、下三行同屏对比**（对应交互式源码保存在 [`scripts/deepseek_g4/examples/`](../scripts/deepseek_g4/examples/)）：
+我把 **① 官方满血版演示**、**② Abiray `IQ2_XXS`** 和 **③ Unsloth `UD-IQ2_XXS`** 生成出来的网页用无头浏览器各录了 10 秒视频，拼成了下面这个 **上、中、下三行同屏对比视频**：
 
-![DeepSeek-V4.1 鹈鹕骑车三方对比预览](../assets/deepseek_v41_g4/pelican_3way_comparison_preview.png)
+![DeepSeek-V4.1 鹈鹕骑车三方 10 秒上中下三行对比视频](../assets/deepseek_v41_g4/pelican_3way_comparison.mp4)
 
 说实话，跑出来那一刻我挺惊讶的——**这两个 2-bit 量化版画出来的效果，比官方演示还要丰富得多**：
 - **两个版本都没有「断腿」或「车轮悬空」**：它们全都自己写了一段逆运动学代码，让鹈鹕的两只脚蹼老老实实踩在脚踏板上跟着转，连大嘴兜都会随着踩车的节奏一颠一颠地晃动，甚至还自己加上了调速滑块、时速表和晴天/夕阳/夜晚切换按钮。
@@ -90,7 +90,7 @@
 
 # 四、看鹈鹕源码时发现的一个神坑：Engram 置零会让人「提笔忘字」
 
-其实上面第三行那个惊艳的 Unsloth 鹈鹕画面，是我修掉了几个拼写 Bug 之后才跑出来的。翻看它刚生成出来的原始 HTML 源码（[`pelican_ud_iq2xxs.html`](../scripts/deepseek_g4/examples/pelican_ud_iq2xxs.html)）时，我撞上了一个特别有意思的现象，刚好能直观展示 **把 Engram 置零到底会发生什么**。
+其实上面第三行那个惊艳的 Unsloth 鹈鹕视频，是我修掉了几个拼写 Bug 之后才跑出来的。翻看它刚生成出来的原始 HTML 源码时，我撞上了一个特别有意思的现象，刚好能直观展示 **把 Engram 置零到底会发生什么**。
 
 前面提到，Unsloth 在官方文档里写过一句：*“我们在测跑分时把 196B 的 Engram 分片直接删掉了，对跑分没有任何影响。”*
 
@@ -109,15 +109,15 @@
 
 ![拔掉 196B Engram 记忆表会发生什么：原始直出源码翻车与 replace() 现场自救实证](../assets/deepseek_v41_g4/ep3_ds41_engram_code_evidence.png)
 
-我做了一个小实验：**一行数学公式和坐标都不改**，只把被拆开的 JS API 空格删掉，再对比「**修正前（保留 `<ellips>` 缺云朵/眼白、`Suny/Sunsot` 错字，以及喉囊/翅膀原点双重叠加狂抖）**」和「**修正后（[`pelican_ud_iq2xxs_fixed.html`](../scripts/deepseek_g4/examples/pelican_ud_iq2xxs_fixed.html)，批量补全 `<ellipse>` 标签并删掉重复的 `transform-origin`）**」的实际画面：
+我做了一个小实验：**一行数学公式和坐标都不改**，只把被拆开的 JS API 空格删掉，再对比「**修正前（保留 `<ellips>` 缺云朵/眼白、`Suny/Sunsot` 错字，以及喉囊/翅膀原点双重叠加狂抖）**」和「**修正后（批量补全 `<ellipse>` 标签并删掉重复的 `transform-origin`）**」的实际画面，录了下面这个 10 秒同屏对比视频：
 
-![Engram 置零 Bug 修正前后同屏对比预览](../assets/deepseek_v41_g4/pelican_engram_bug_vs_fix_preview.png)
+![Engram 置零 Bug 修正前后 10 秒同屏对比视频](../assets/deepseek_v41_g4/pelican_engram_bug_vs_fix.mp4)
 
 上行修正前，天空光秃秃一片、鹈鹕只有黑眼珠没有眼白、底下按钮写着 `Suny` 和 `Sunsot`，橙色大嘴兜更是缩到脖子后面跟翅膀一起疯狂抽搐；下行仅仅修掉了这几个拼写和重复属性小瑕疵，4 朵白云和眼白瞬间全部复原，大嘴兜乖乖挂回下巴底下轻微呼吸，翅膀也稳稳锁死在了车把上！
 
 ![748B 架构第一性原理解密：552B MoE 骨干网 vs 196B Engram 记忆表](../assets/deepseek_v41_g4/ep3_ds41_fig4_backbone_vs_engram.png)
 
-把这个对比画面和源码放在一起看，748B 架构的分工一下就透亮了：
+把这个对比视频和源码放在一起看，748B 架构的分工一下就透亮了：
 - **为什么 Unsloth 测数学跑分（AIME / MMLU）发现删掉 Engram 没影响？** 因为数学题最后只看括号里的一个数字（比如 `123`），选择题只看 `A/B/C/D`，这些纯靠 **552B MoE 骨干网** 的逻辑推理就能拿满分。
 - **那 196B 的 Engram 表到底是干嘛的？** 它其实就是模型的「**拼写与语法肌肉记忆库**」！DeepSeek 把死记硬背单词怎么拼、HTML 标签和 DOM API 怎么连写的活儿交给了这个 196B 的查找表。一旦把它置零，模型脑子虽然还很聪明（连逆运动学都手到擒来），但写起代码来就像一个「逻辑满分却突然提笔忘字」的程序员。
 
@@ -147,17 +147,18 @@
 
 ---
 
-# 五、到底选哪个版本？4 条命令一键开跑
+# 五、本期实测版本怎么选？4 条命令一键开跑（附下期预告）
 
-最后总结一下这两个 2-bit 量化版怎么选：
+先总结一下**本期我已经实测跑通、并打包进一键脚本**的这两个 552B 全专家 2-bit 版本怎么选：
 
 ![两大 2-Bit 旗舰量化版 vs 官方满血版「鹈鹕骑自行车」与选型总表](../assets/deepseek_v41_g4/ep3_ds41_fig3_pelican_and_selection_table.png)
 
-- 如果你更看重 **官方跑分和工程严谨度**，选 **`Unsloth Dynamic V3.1 UD-IQ2_XXS`**（165.3GB 骨干，把 G4 的 96GB 显存和 76GB 锁页内存刚好榨干）；
-- 如果你想 **留点内存余量、或者想要去审查的版本**，选 **`Abiray GSQ-RCO IQ2_XXS`**（138.6GB 骨干）；
-- 如果你 **专门用来写代码且不想折腾 `/dev/shm` 内存盘混放**，也可以试试上面提到的 **`ISTA-DASLab GSQ-RCO-Coder`**（72.1GB 骨干 + 110.6GB 完整 Engram）。
+- 如果你更看重 **官方跑分、长文本深度推理和工程严谨度**，选 **`Unsloth Dynamic V3.1 UD-IQ2_XXS`**（`165.3 GB` 骨干，把 G4 的 `96 GB` 显存和 `76 GB` 锁页内存刚好榨干，做逻辑分析、数学推导、架构设计非常稳）；
+- 如果你想 **留出充足内存余量、或者想要无审查（Uncensored）的丝滑对话体验**，选 **`Abiray GSQ-RCO IQ2_XXS`**（`138.6 GB` 骨干，只占 `44 GiB` 锁页内存，速度最快可达 `52 tok/s`）。
 
-我已经把开机预热、双模型网关和热切换全都打包进了 [`scripts/deepseek_g4/fast_start_g4.sh`](../scripts/deepseek_g4/fast_start_g4.sh)，平时用起来就这 4 条命令：
+说句实话，在目前「Engram 置零」的跑法下，这两个版本用来日常问答、做方案、推逻辑已经非常爽了；如果拿来一次性直出几百行前端代码，脑子和审美完全在线，只需配合编辑器顺手修掉三四个拼写小笔误就能完美运行。
+
+我已经把这两个实测版本的开机预热、双模型网关和热切换全部打包进了 `fast_start_g4.sh`，现在就能直接用这 4 条命令开跑：
 
 ```bash
 # 1. 一键开机、从云盘拉取模型到本地盘、启动双模型网关与 Cloudflare 隧道（冷启动约 4～5 分钟）
@@ -174,6 +175,17 @@
 ./scripts/deepseek_g4/fast_start_g4.sh stop
 ```
 
+## 🎬 下期预告：实测「72.1GB 全显存骨干 + 110.6GB 满血 Engram 进内存」到底有多猛？
+
+这次折腾最大的意外收获，就是顺着那只「五官乱飞的骑车鹈鹕」扒出了 196B Engram 记忆表的真实作用。既然第四章我们已经把账算明白了——**用 `ISTA-DASLab` 的 `GSQ-RCO-Coder`（`72.12 GB` 骨干 100% 进 96GB 显存）搭配完整 `110.60 GB` Engram（100% 塞进 188GB DDR5 内存缓存）**，理论上不仅能彻底根治代码拼写笔误，而且因为骨干网完全不需要跑 CPU 内存专家，生成速度很可能还会再上一个台阶！
+
+由于这一期光把 275GB 分片拆解、双模型网关和鹈鹕破案测完就已经肝满篇幅了，第四章推演出来的这套 **「方案一（72.1GB Coder 全显存 + 110.6GB 满血 Engram 全内存）」** 和 **「方案二（Abiray + 2-bit 瘦身版 Engram）」** 我还没来得及上机实测。
+
+**下一期，我们就把这套满血 Engram 方案拉上单卡 G4 实测跑一轮：**
+1. 挂上真 Engram 之后，再画同一只骑车鹈鹕，看看能不能做到 **0 错别字、一把直出完美动画**？
+2. 当 `72.1 GB` 骨干 100% 跑在 G4 显存里、`110.6 GB` Engram 100% 缓存在 DDR5 内存中时，实际生成速度能不能突破 **`60～80+ tok/s`**？
+3. 实测验证完后，我也会把满血 Engram 模式同步更新进 `colab-ultra-workstation` 的一键脚本里，敬请期待！
+
 ---
 
 ## 🔗 附录：相关模型与开源工具仓库
@@ -186,3 +198,11 @@
 - **ISTA-DASLab `GSQ-RCO-Coder` 代码专精版仓库（72.1GB 骨干 + 110.6GB Engram）**：https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-Coder-GGUF
 - **Google 官方 Colab 命令行工具 (`google-colab-cli`)**：https://github.com/googlecolab/google-colab-cli
 - **Colab 云盘静默挂载扩展 (`colab-dfs-ext`)**：https://github.com/deluxebear/colab-dfs-ext
+
+---
+
+### 🥚 写在最后：欢迎来「赛博领鸡蛋」社群一起玩！
+
+从第一篇挂载 20TB 云盘，到第二篇跑 33B 视频生成，再到这次用单张 96GB G4 把 748B 的 DeepSeek-V4.1 变成随叫随到的私人 API，其实最大的感受就是：**只要摸清规则，手里的 Google AI Ultra 算力真的能玩出花来。**
+
+如果你在跟着配这套 G4 环境时卡住了，或者想直接拿现成的脚本，欢迎来我们的交流群 **「赛博领鸡蛋」**（X 社群链接：https://x.com/i/communities/2035933722114609493 ）一起聊！觉得这篇折腾记录对你有启发的话，欢迎点赞、转发、收藏支持一下！🚀
