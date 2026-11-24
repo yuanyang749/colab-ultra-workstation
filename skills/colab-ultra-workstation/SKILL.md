@@ -1,11 +1,11 @@
 ---
 name: colab-ultra-workstation
-description: "Google AI Ultra (5x 1,000 CCU + 20TB / 20x 2,000 CCU + 30TB Google Drive) 云端算力智能调度与 colab-mcp / colab-dfs-ext 工作站规范。当用户要求连接/使用 Google Colab、零浏览器静默挂载 Google Drive (`colab dfs mount`)、跑 AI 视频模型（MiniMax-H3/Wan2.1/Hunyuan/LTX/ComfyUI）、跑基础大语言模型 LLM（7B/14B/32B/70B 及 748B DeepSeek-V4.1-Flash 推理或微调）、下载模型权重到 Google Drive 或咨询 Colab 显卡选择（CPU/T4/L4/G4/A100/H100）时必须激活此技能。"
+description: "Google AI Ultra (5x 1,000 CCU + 20TB / 20x 2,000 CCU + 30TB Google Drive) 云端算力智能调度与 colab-mcp / colab-ext 工作站规范。当用户要求连接/使用 Google Colab、零浏览器静默挂载 Google Drive (`colab drive mount`)、跑 AI 视频模型（MiniMax-H3/Wan2.1/Hunyuan/LTX/ComfyUI）、跑基础大语言模型 LLM（7B/14B/32B/70B 及 748B DeepSeek-V4.1-Flash 推理或微调）、下载模型权重到 Google Drive 或咨询 Colab 显卡选择（CPU/T4/L4/G4/A100/H100）时必须激活此技能。"
 ---
 
 # Google AI Ultra 云端工作站与智能硬件调度规范 (兼容 5x / 20x 套餐)
 
-本技能指导 Agent 通过 **`colab-mcp`（网页桥接通道）** 或 **`google-colab-cli` + `colab-dfs-ext`（纯终端无浏览器通道）** 高效操控用户的 Google Colab 云端工作站，并根据任务类型（AI 视频生成、基础/超大 MoE LLM 推理与微调、大文件下载）自动推荐与校验最优 GPU 档位，最大化利用 **Google AI Ultra 5x（1,000 CCU/月 + 20TB 云盘）** 或 **20x（2,000 CCU/月 + 30TB 云盘）** 订阅资源。
+本技能指导 Agent 通过 **`colab-mcp`（网页桥接通道）** 或 **`google-colab-cli` + `colab-ext`（纯终端无浏览器通道）** 高效操控用户的 Google Colab 云端工作站，并根据任务类型（AI 视频生成、基础/超大 MoE LLM 推理与微调、大文件下载）自动推荐与校验最优 GPU 档位，最大化利用 **Google AI Ultra 5x（1,000 CCU/月 + 20TB 云盘）** 或 **20x（2,000 CCU/月 + 30TB 云盘）** 订阅资源。
 
 ## 1. 视频与多模态硬件调度矩阵
 
@@ -31,16 +31,16 @@ description: "Google AI Ultra (5x 1,000 CCU + 20TB / 20x 2,000 CCU + 30TB Google
 | **`llm_ultra_moe` (748B 旗舰图文多模态 MoE)**<br>*DeepSeek-V4.1-Flash-1017 (`IQ2_XXS` + `972MB BF16 mmproj`)* | **`G4 GPU`** (96GB GDDR7 + 188GB DDR5)<br>**10.05 CCU/h** *(0 Swap, **47.4~54.6 tok/s**)* | 需使用 2-bit 旗舰量化 + Delta `sm_120a`（或 `--vision` 启用 `llama-server --mmproj` 原生多模态看图）：<br>• **代码首选 (`ista-coder-iq2xxs`)**：`72.12 GB` 主干 + `0.91 GiB` `mmproj-BF16` 100% 锁显存 (`~70.4 GiB`) + **`110.60 GB` 完整 `IQ4_NL` Engram 100% 锁 DDR5 内存**，实测 **`54.63 tok/s`**，0 拼写错误<br>• **全专家 (`unsloth-ud-iq2xxs` / `abiray-gsq-iq2xxs`)**：`138.6~165.3 GB` 主干 + 128KB 稀疏头 Engram (`47.4~51.5 tok/s`) | N/A | 详见 [`references/deepseek_v41_748b_g4_guide.md`](references/deepseek_v41_748b_g4_guide.md) 与 [`scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py`](scripts/deepseek_g4/step3_g4_hybrid_stage_and_benchmark.py)。 |
 | **`llm_bandwidth` (极致单流吐字)** | **`H100 GPU`** (80GB HBM3, **18.05 CCU/h**) | 仅当总显存 < 75GB 且追求极致 HBM3 带宽时选用 | 不推荐（G4 性价比高一倍） | 日常 LLM 推理/微调优先用 **L4** 和 **G4**。 |
 
-## 3. 本地环境自检与一键安装指南 (`colab-mcp` + `google-colab-cli` + `colab-dfs-ext` + `colabllm`)
+## 3. 本地环境自检与一键安装指南 (`colab-mcp` + `google-colab-cli` + `colab-ext` + `colabllm`)
 
 ```bash
 # 1) 安装 colab-mcp（网页桥接通道，含 socksio 代理兼容）
 uv tool install --with socksio --force git+https://github.com/googlecolab/colab-mcp
 
-# 2) 安装官方 google-colab-cli (0.7.5+) 与 colab-dfs-ext（零浏览器静默挂载扩展）
+# 2) 安装官方 google-colab-cli (0.7.5+) 与 colab-ext（零浏览器静默挂载扩展）
 uv tool install --with socksio google-colab-cli
-curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-dfs-ext/main/install.sh | sh
-colab dfs doctor
+curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-ext/main/install.sh | sh
+colab ext doctor
 
 # 3) 安装 colabllm (0.1.2+) 与 Cloudflare cf CLI（标准化多模态运行时与固定域名编排）
 uv tool install colabllm
@@ -48,13 +48,22 @@ colabllm skill --output ~/.agents/skills
 npm install -g cf --prefix ~/.local
 colabllm doctor --online --transport quick
 
-# 4) 首次一次性 OAuth 授权（⚠️ 浏览器弹窗中务必手动勾选 Google Drive 复选框！）
-https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab dfs consent
-grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
+# 4) 首次 OAuth 授权：由用户本人在浏览器选择对应账号并勾选 Google Drive 权限
+colab drive consent
+
+# 查看已保存的授权摘要（不显示明文 refresh token 或 client secret）
+colab drive show
 ```
 
-> **🚨 首次授权避坑铁律**：若在 Google 授权页漏勾 Google Drive 复选框导致 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`，执行以下命令重签 `drive` 权限：
-> `python3 ~/.colab-dfs-ext/colab_dfs_ext/dfs_creds.py consent --flavor dfs --scopes "https://www.googleapis.com/auth/drive" --user-id <GaiaId> --email <Email>`
+如果本地需要 HTTP 代理，请确保 OAuth 回调地址 `localhost,127.0.0.1` 直连（端口按实际环境修改）：
+
+```bash
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab drive consent
+```
+
+> **首次授权避坑**：若漏勾 Google Drive 权限导致 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`，用同一账号重新运行 `colab drive consent`（如需代理，沿用上面的设置），勾选 Drive 权限，再用 `colab drive show` 检查摘要中的 `scopes` 是否包含 `https://www.googleapis.com/auth/drive`。摘要仍可能显示账号和邮箱，不要公开完整输出。`colab dfs` 仍是兼容别名。
+
+使用多个 Colab 配置时，用 `colab -a <profile> ...` 显式选择配置。若算力和 Drive 来自不同配置，为 Drive 配置授权，挂载时用 `--drive-account` 指定它。`colab drive show` 只读取本地保存的摘要，不验证实际访问；在已有会话中用 `colab drive mount` 挂载并确认能读取 Drive。
 
 ## 4. Agent 标准作业程序 (SOP) 与全生命周期托管
 
@@ -64,7 +73,7 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
    - **跑完即焚单次任务**：`~/.local/bin/colab run <script.py> --gpu <G4|L4|T4>`
 
 2. **20TB/30TB 云盘零浏览器静默挂载与防只读/假死自愈**：
-   - **CLI 模式**：`~/.local/bin/colab dfs mount -s <session>`（只读保护加 `--readonly`；FUSE 假死原地重挂加 `--force --purge-state`）。
+   - **CLI 模式**：`~/.local/bin/colab drive mount -s <session>`（只读保护加 `--readonly`；FUSE 假死原地重挂加 `--force --purge-state`）。
    - **`colab-mcp` 网页模式**：运行 `python3 scripts/mcp_dfs_mount.py` 生成载荷执行，挂载成功后立即运行 `python3 scripts/mcp_dfs_mount.py --sanitize` 擦除单元格中的明文 Token。
    - **路径兼容**：自动建立软链接 `os.symlink("/content/drive/My Drive", "/content/drive/MyDrive")`。
 
