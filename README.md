@@ -18,7 +18,7 @@
 3. **选卡不当与幽灵计费**：开着 `10.05 CCU/h` 的 G4 去下模型、跑小任务，或任务结束后忘记销毁实例导致整夜扣费；
 4. **长视频与超分成本失控**：多段视频接力容易起雾穿帮，盲目跑全幅 2K 扩散精修一次消耗近 `19 CCU`。
 
-**`colab-ultra-workstation`** 将 [`google-colab-cli`](https://pypi.org/project/google-colab-cli/)、[`colab-dfs-ext`](https://github.com/deluxebear/colab-dfs-ext)（零浏览器静默挂载扩展）、[`colabllm`](https://github.com/deluxebear/colabllm)（标准化多模态服务编排）与 [`colab-mcp`](https://github.com/googlecolab/colab-mcp) 深度整合为一套标准化 **Agent Skill**，让本地 AI Agent 全自动完成 **按需选卡、零浏览器挂载 20TB/30TB 云盘、64 并发直灌本地 NVMe、10 分钟内核防休眠保活、二阶段精修成本门禁拦截，以及关机双轨 CCU 账单核验**。
+**`colab-ultra-workstation`** 将 [`google-colab-cli`](https://pypi.org/project/google-colab-cli/)、[`colab-ext`](https://github.com/deluxebear/colab-ext)（原 `colab-dfs-ext`，零浏览器静默挂载扩展）、[`colabllm`](https://github.com/deluxebear/colabllm)（标准化多模态服务编排）与 [`colab-mcp`](https://github.com/googlecolab/colab-mcp) 深度整合为一套标准化 **Agent Skill**，让本地 AI Agent 全自动完成 **按需选卡、零浏览器挂载 20TB/30TB 云盘、64 并发直灌本地 NVMe、10 分钟内核防休眠保活、二阶段精修成本门禁拦截，以及关机双轨 CCU 账单核验**。
 
 ---
 
@@ -43,13 +43,13 @@
 git clone https://github.com/yuanyang749/colab-ultra-workstation.git ~/.agents/skills/colab-ultra-workstation
 ```
 
-### Step 2：安装零浏览器 CLI 工具链（`google-colab-cli` + `colab-dfs-ext` + `colabllm`）
+### Step 2：安装零浏览器 CLI 工具链（`google-colab-cli` + `colab-ext` + `colabllm`）
 
 ```bash
-# 1) 安装官方 google-colab-cli (0.7.5+) 与 colab-dfs-ext（零浏览器静默挂载 20TB/30TB 云盘）
+# 1) 安装官方 google-colab-cli (0.7.5+) 与 colab-ext（零浏览器静默挂载 20TB/30TB 云盘）
 uv tool install --with socksio google-colab-cli
-curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-dfs-ext/main/install.sh | sh
-colab dfs doctor
+curl -fsSL https://raw.githubusercontent.com/deluxebear/colab-ext/main/install.sh | sh
+colab ext doctor
 
 # 2) 安装 colabllm (0.1.2+) 与 Cloudflare cf CLI（一键拉起标准化多模态服务与公网安全隧道）
 uv tool install colabllm
@@ -60,26 +60,27 @@ npm install -g cf --prefix ~/.local
 uv tool install --with socksio --force git+https://github.com/googlecolab/colab-mcp
 ```
 
-### Step 3：首次一次性 Google Drive OAuth 授权（永久免浏览器弹窗）
+### Step 3：首次 Google Drive OAuth 授权
 
-配合 `colab-dfs-ext` 只需在本地完成一次 OAuth 授权，后续所有云端实例均可秒级静默挂载 `/content/drive`，并由云端后台守护进程自动续期 Token：
+首次授权由用户本人在本地浏览器完成，Agent 不代为确认。之后在已保存的授权仍有效时，`colab drive mount` 可无浏览器挂载 `/content/drive`。`colab dfs` 仍是兼容别名。
 
 ```bash
-# 开启本地代理时请显式传入 no_proxy="localhost,127.0.0.1"
-https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab dfs consent
+colab drive consent
 
-# 验证签发的 Token 已包含 https://www.googleapis.com/auth/drive 作用域
-https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 colab dfs token
+# 查看已保存的授权摘要；refresh token 和 client secret 不会明文显示
+colab drive show
+```
 
-# 将默认 colab drivemount 自动路由至零浏览器 DFS 通道
-grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~/.zshrc
+如果本地需要 HTTP 代理，请在授权时保留回调地址 `localhost,127.0.0.1` 直连（端口按实际环境修改）：
+
+```bash
+https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 no_proxy="localhost,127.0.0.1" colab drive consent
 ```
 
 > [!IMPORTANT]
-> **首次授权必看（Google OAuth 复选框陷阱）**：在浏览器弹出的 Google 授权确认页中，**「查看、编辑、创建和删除您的所有 Google 云端硬盘文件 (Google Drive)」** 旁边的复选框默认处于**未勾选**状态。请务必手动勾选后再点击「继续」；若漏勾导致挂载报 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`，执行以下命令重签 `drive` 权限即可：
-> ```bash
-> python3 ~/.colab-dfs-ext/colab_dfs_ext/dfs_creds.py consent --flavor dfs --scopes "https://www.googleapis.com/auth/drive" --user-id <GaiaId> --email <Email>
-> ```
+> **首次授权必看**：在 Google 授权页查看并勾选 Google Drive 权限。若漏勾后遇到 `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT`，用同一账号重新运行 `colab drive consent`（如需代理，沿用上面的设置），勾选 Drive 权限，再用 `colab drive show` 检查摘要中的 `scopes` 是否包含 `https://www.googleapis.com/auth/drive`。摘要仍可能显示账号和邮箱，不要公开完整输出。
+
+使用多个 Colab 配置时，用 `colab -a <profile> ...` 显式选择配置。若算力和 Drive 来自不同配置，为 Drive 配置授权，挂载时用 `--drive-account` 指定它。`colab drive show` 只读取本地保存的摘要，不验证实际访问；在已有会话中用 `colab drive mount` 挂载并确认能读取 Drive。
 
 ### Step 4：日常高频运维速查表
 
@@ -88,8 +89,8 @@ grep -q 'COLAB_DFS_DEFAULT=1' ~/.zshrc || echo 'export COLAB_DFS_DEFAULT=1' >> ~
 | **按需开机** | `colab new -s work` | 启动 **免费 CPU (`0.00 CCU/h`)**，专用于预下载模型与整理云盘 |
 | **指定 GPU** | `colab new -s work --gpu G4` | 启动 **G4 (`96GB Blackwell, 10.05 CCU/h`)**（可选 `L4` / `T4` / `A100` / `H100`） |
 | **跑完即焚** | `colab run task.py --gpu G4` | 创建临时 GPU 跑完脚本后立即自动销毁释放实例 |
-| **静默挂盘** | `colab dfs mount -s work` | 零浏览器秒级挂载 `/content/drive`（加 `--readonly` 开启只读防误删保护） |
-| **掉盘自愈** | `colab dfs mount -s work --force --purge-state` | FUSE 假死原地抢救重挂（无需重启 GPU 实例） |
+| **静默挂盘** | `colab drive mount -s work` | 零浏览器秒级挂载 `/content/drive`（加 `--readonly` 开启只读防误删保护） |
+| **掉盘自愈** | `colab drive mount -s work --force --purge-state` | FUSE 假死原地抢救重挂（无需重启 GPU 实例） |
 | **计费打点** | `python3 scripts/colab_meter.py start -s work -g G4` | 任务启动前记录精确时间戳与初始 CCU 余额 |
 | **关机核验** | `colab stop -s work && python3 scripts/colab_meter.py stop -s work` | 销毁实例并输出双轨 CCU 消耗结算单（确认 `Active assignments: 0`） |
 
